@@ -1,6 +1,9 @@
 import type { SiteConfig } from "@/lib/content/types";
 
-const siteUrl = process.env.SITE_URL?.trim() || "http://localhost:3000";
+const siteUrl =
+  process.env.SITE_URL?.trim() ||
+  process.env.APP_ORIGIN?.trim() ||
+  "http://localhost:3000";
 
 export const siteConfig = {
   name: "棱镜手记",
