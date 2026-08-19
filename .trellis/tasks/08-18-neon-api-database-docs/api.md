@@ -108,7 +108,7 @@
 
 ```ts
 type LocalImageDto = {
-  src: `/images/${string}`
+  src: `/images/${string}` | `https://assets.tendercfj.cc.cd/${string}`
   alt: string
   width: number
   height: number
@@ -499,7 +499,15 @@ curl -sS -X PATCH 'https://blog.example.com/api/v1/me/profile' \
   --data '{"name":"林屿","bio":"新的简介","version":3}'
 ```
 
-成功返回更新后的 profile；版本过期返回 `409 VERSION_CONFLICT`。头像和链接沿用 `LocalImageDto` 与 `{label, href}`，只接受 `https:`、`mailto:` 或站内绝对路径。
+成功返回更新后的 profile；版本过期返回 `409 VERSION_CONFLICT`。头像沿用 `LocalImageDto`，只接受站内 `/images/` 或 `https://assets.tendercfj.cc.cd/`；链接沿用 `{label, href}`，只接受 `https:`、`mailto:` 或站内绝对路径。
+
+### 6.1 R2 资源上传
+
+| Method | Path | 身份 | 成功 | 请求/说明 |
+| --- | --- | --- | --- | --- |
+| `POST` | `/media` | 唯一站长 session + 同源 Origin | `201` | `multipart/form-data`：`path`、`file` |
+
+服务端使用 UUID 生成唯一对象名称，并保留安全的原始扩展名；客户端不能指定最终名称。响应包含 `name`、`key`、`url`、`contentType`、`size`、`etag` 和 `versionId`。上传接口不新建数据库资源记录；调用方在保存头像或文章时，把 `url` 写入现有 `author_profiles.avatar_src` 或 `posts.cover_src`。
 
 ## 7. 站长文章 CRUD 与工作流
 
@@ -604,7 +612,7 @@ curl -sS -X POST 'https://blog.example.com/api/v1/me/posts/92c5195c-12c6-41f0-97
 - `title`、`excerpt`、合法且唯一的 `slug`；
 - 有效 category、至少一个有效 tag；
 - 非空且通过完整判别联合校验的 `body`；heading ID 在文章内唯一；
-- 完整 cover：站内 `/images/` 路径、非空 alt、正整数 width/height；
+- 完整 cover：站内 `/images/` 或 `https://assets.tendercfj.cc.cd/` 路径、非空 alt、正整数 width/height；
 - 首次发布由服务端时钟写入 `published_at`，不接受未来时间，不实现定时发布。
 
 失败示例：

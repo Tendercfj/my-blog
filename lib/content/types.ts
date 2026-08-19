@@ -1,8 +1,11 @@
 export type Slug = string;
 export type IsoDate = `${number}-${number}-${number}`;
+export type ImageSource =
+  | `/images/${string}`
+  | `https://assets.tendercfj.cc.cd/${string}`;
 
 export interface LocalImage {
-  src: `/images/${string}`;
+  src: ImageSource;
   alt: string;
   width: number;
   height: number;

@@ -12,6 +12,7 @@ import type {
 
 const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+const r2ImageOrigin = "https://assets.tendercfj.cc.cd";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) {
@@ -26,11 +27,18 @@ function isValidDate(value: string): boolean {
 }
 
 function validateImage(image: LocalImage, owner: string): void {
-  assert(image.src.startsWith("/images/"), `${owner}: image must use /images/: ${image.src}`);
   assert(image.alt.trim().length > 0, `${owner}: informative image needs alt text`);
   assert(image.width > 0 && image.height > 0, `${owner}: image dimensions must be positive`);
-  const filePath = join(process.cwd(), "public", image.src.slice(1));
-  assert(existsSync(filePath), `${owner}: local image does not exist: ${image.src}`);
+
+  if (image.src.startsWith("/images/")) {
+    const filePath = join(process.cwd(), "public", image.src.slice(1));
+    assert(existsSync(filePath), `${owner}: local image does not exist: ${image.src}`);
+    return;
+  }
+
+  const url = new URL(image.src);
+  assert(url.origin === r2ImageOrigin, `${owner}: unsupported image origin: ${image.src}`);
+  assert(url.pathname !== "/", `${owner}: R2 image path cannot be empty`);
 }
 
 function validateLink(href: string, owner: string): void {

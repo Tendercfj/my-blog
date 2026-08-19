@@ -7,17 +7,55 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 ```ts
 import { uploadToR2 } from "@/lib/storage/r2";
 
-const result = await uploadToR2("uploads", fileName, fileBuffer);
+const result = await uploadToR2("uploads", fileBuffer);
 
 // 在 Next.js Route Handler 中，也可以直接传入 formData 得到的 File：
-const fileResult = await uploadToR2("uploads", file.name, file);
+const fileResult = await uploadToR2("uploads", file);
 
-console.log(result.ETag);
+console.log(result.url);
 ```
 
-方法的三个参数依次是 `path`、`name` 和资源内容。`path`、`name` 会拼接成 R2 object key；`File`/`Blob` 的 MIME 类型会自动设置，`Buffer`、`Uint8Array` 或字符串也可以作为内容传入。
+方法只接收 `path` 和资源内容。服务端生成 UUID 名称并与 `path` 拼接成 R2 object key；`File`/`Blob` 的 MIME 类型会自动设置，`Buffer`、`Uint8Array` 或字符串也可以作为内容传入。上传结果包含 `name`、`key`、`url`、`etag` 和 `versionId`，其中 `url` 使用 `CLOUDFLARE_R2_PUBLIC_URL` 生成。
 
-该方法使用 [Cloudflare R2 S3 API](https://developers.cloudflare.com/r2/get-started/s3/) 的 endpoint（`https://<ACCOUNT_ID>.r2.cloudflarestorage.com`）和 `region: "auto"`。R2 不会自动生成公开访问 URL；如需公开访问，请在 Cloudflare 控制台配置 custom domain 或 public bucket。
+服务端读取原始 R2 内容时使用：
+
+```ts
+import { readFromR2 } from "@/lib/storage/r2";
+
+const object = await readFromR2("uploads", result.name);
+const bytes = await object.Body?.transformToByteArray();
+```
+
+### 前端上传并保存 URL
+
+现有数据库需要先放宽头像和文章封面的 URL 约束，不会创建新表：
+
+```bash
+psql "$DATABASE_URL_UNPOOLED" -v ON_ERROR_STOP=1 -f db/migrations/0002_r2_image_urls.sql
+```
+
+然后在已登录的 Client Component 中只传 `path` 和文件内容。服务端会生成 UUID 文件名并保留安全的原扩展名：
+
+```tsx
+"use client";
+
+import { uploadMedia } from "@/lib/media/client";
+
+async function handleFile(file: File) {
+  const uploaded = await uploadMedia("posts/covers", file);
+
+  console.log(uploaded.name);
+  console.log(uploaded.url);
+  // https://assets.tendercfj.cc.cd/posts/covers/<uuid>.jpg
+
+  // 保存文章时，将 uploaded.url 写入 posts.cover_src。
+  // 保存头像时，将 uploaded.url 写入 author_profiles.avatar_src。
+}
+```
+
+`POST /api/v1/media` 接收 `multipart/form-data` 的 `path` 和 `file`，要求站长登录且请求同源。接口返回服务端生成的 `name`、`key`、真实公开 `url`、MIME、大小、ETag 和 VersionId。上传接口不新增数据库记录；头像或文章保存接口分别把 URL 写入现有的 `author_profiles.avatar_src` 或 `posts.cover_src`。
+
+该方法使用 [Cloudflare R2 S3 API](https://developers.cloudflare.com/r2/get-started/s3/) 的 endpoint（`https://<ACCOUNT_ID>.r2.cloudflarestorage.com`）和 `region: "auto"`。公开资源通过已绑定到同一 bucket 的 custom domain `https://assets.tendercfj.cc.cd` 访问。
 
 ## Getting Started
 

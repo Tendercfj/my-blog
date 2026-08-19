@@ -5,6 +5,7 @@ import { ZodError } from "zod";
 
 import { ApiProblem, type ApiErrorDetail } from "@/lib/api/problem";
 import { DatabaseUnavailableError } from "@/lib/db/runtime";
+import { R2ConfigurationError, R2StorageError } from "@/lib/storage/r2";
 
 export function createRequestId(): string {
   return randomUUID();
@@ -74,6 +75,14 @@ export function errorResponse(error: unknown, requestId: string) {
 
   if (error instanceof DatabaseUnavailableError) {
     return jsonError(503, "DATABASE_UNAVAILABLE", "数据库暂时不可用", requestId);
+  }
+
+  if (error instanceof R2ConfigurationError) {
+    return jsonError(503, "STORAGE_NOT_CONFIGURED", "对象存储尚未完成配置", requestId);
+  }
+
+  if (error instanceof R2StorageError) {
+    return jsonError(503, "STORAGE_UNAVAILABLE", "对象存储暂时不可用", requestId);
   }
 
   return jsonError(500, "INTERNAL_ERROR", "服务暂时不可用", requestId);

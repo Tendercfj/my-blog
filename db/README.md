@@ -69,4 +69,14 @@
 
 7. 登录成功后所有业务页面可见；无 session 访问首页、文章、归档、标签、分类、关于页或账号页时会跳转 `/login`。伪造、过期或已撤销的 Cookie 会由服务端数据库 session 校验拒绝。
 
+## R2 图片 URL
+
+现有 schema 的头像和文章封面字段默认只接受 `/images/`。使用 R2 custom domain 前，通过 direct connection 放宽这两个约束；该 migration 不创建新表：
+
+```bash
+rtk psql '<DATABASE_URL_UNPOOLED>' -v ON_ERROR_STOP=1 -f db/migrations/0002_r2_image_urls.sql
+```
+
+完成后，`author_profiles.avatar_src` 和 `posts.cover_src` 可以保存 `/images/...` 或 `https://assets.tendercfj.cc.cd/...`。migration 应先在 disposable/local database 或已确认的 Neon branch 上验证，不要从浏览器或 Next.js runtime 自动执行。
+
 不要把真实连接串、密码或 pepper 写入源码、`.env.example`、日志或客户端环境变量。
