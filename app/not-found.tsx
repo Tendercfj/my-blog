@@ -1,7 +1,11 @@
 import { FileQuestion } from "lucide-react";
 import Link from "next/link";
 
-export default function NotFound() {
+import { requireCurrentSession } from "@/lib/auth/session";
+
+export default async function NotFound() {
+  await requireCurrentSession();
+
   return (
     <div className="page-container page-section">
       <section className="glass-card px-6 py-20 text-center">

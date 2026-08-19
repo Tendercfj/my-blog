@@ -3,6 +3,7 @@ import { Hash } from "lucide-react";
 
 import { TagCloud } from "@/components/blog/tag-cloud";
 import { FullWidthLayout } from "@/components/site/page-layout";
+import { requireCurrentSession } from "@/lib/auth/session";
 import { getAllTags } from "@/lib/content/repository";
 
 export const metadata: Metadata = {
@@ -11,6 +12,7 @@ export const metadata: Metadata = {
 };
 
 export default async function TagsPage() {
+  await requireCurrentSession();
   const tags = await getAllTags();
   return (
     <FullWidthLayout>

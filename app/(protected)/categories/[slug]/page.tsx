@@ -7,6 +7,7 @@ import { EmptyState } from "@/components/blog/empty-state";
 import { PageIntro } from "@/components/blog/page-intro";
 import { StandardTwoColumnLayout } from "@/components/site/page-layout";
 import { BlogSidebar } from "@/components/sidebar/blog-sidebar";
+import { requireCurrentSession } from "@/lib/auth/session";
 import {
   getAllCategories,
   getPostsByCategory,
@@ -18,13 +19,8 @@ import { routes } from "@/lib/routes";
 
 type PageProps = { params: Promise<{ slug: string }> };
 
-export const dynamicParams = false;
-
-export async function generateStaticParams() {
-  return (await getAllCategories()).map((category) => ({ slug: category.slug }));
-}
-
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  await requireCurrentSession();
   const { slug } = await params;
   const [site, categories] = await Promise.all([getSiteConfig(), getAllCategories()]);
   const category = categories.find((item) => item.slug === slug);
@@ -37,6 +33,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 }
 
 export default async function CategoryDetailPage({ params }: PageProps) {
+  await requireCurrentSession();
   const { slug } = await params;
   const [posts, categories, sidebar] = await Promise.all([
     getPostsByCategory(slug),

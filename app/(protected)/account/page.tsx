@@ -1,11 +1,10 @@
 import { CircleUserRound, FilePenLine } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { redirect } from "next/navigation";
 
 import { LogoutButton } from "@/components/auth/logout-button";
 import { FullWidthLayout } from "@/components/site/page-layout";
-import { getCurrentSession } from "@/lib/auth/session";
+import { requireCurrentSession } from "@/lib/auth/session";
 import { routes } from "@/lib/routes";
 
 export const dynamic = "force-dynamic";
@@ -16,8 +15,7 @@ export const metadata: Metadata = {
 };
 
 export default async function AccountPage() {
-  const session = await getCurrentSession();
-  if (!session) redirect(routes.login);
+  const session = await requireCurrentSession();
 
   return (
     <FullWidthLayout>

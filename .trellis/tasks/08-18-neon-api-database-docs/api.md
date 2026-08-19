@@ -9,7 +9,7 @@
 | 产品模型 | 单账号个人博客，唯一站长账号 |
 | 身份模型 | 自研邮箱密码认证 + opaque session Cookie |
 | 数据源 | Neon PostgreSQL |
-| 当前状态 | 设计契约，不代表 Route Handlers 已实现 |
+| 当前状态 | login/logout/me/register 已接入；业务页面使用 Proxy 乐观检查与数据库 session 权威保护 |
 
 本文档中的示例域名统一使用 `https://blog.example.com`，不包含真实连接串、账号或 Secret。
 
@@ -18,9 +18,9 @@
 ### 2.1 JSON 与字段
 
 - 请求和响应使用 `application/json; charset=utf-8`，字段采用 `camelCase`。
-- 资源 ID 使用 UUID 字符串；公开页面路由使用小写 kebab-case `slug`。
+- 资源 ID 使用 UUID 字符串；已发布内容页面路由使用小写 kebab-case `slug`。
 - API 时间戳使用 UTC RFC 3339，例如 `2026-08-18T09:30:00.000Z`。
-- 为兼容当前页面领域模型，公开文章 DTO 的 `publishedAt` / `updatedAt` 输出 `YYYY-MM-DD`；管理 DTO 额外输出精确时间戳 `publishedAtTime` / `updatedAtTime`。
+- 为兼容当前页面领域模型，已发布文章 DTO 的 `publishedAt` / `updatedAt` 输出 `YYYY-MM-DD`；管理 DTO 额外输出精确时间戳 `publishedAtTime` / `updatedAtTime`。
 - 可空字段稳定返回 `null`；集合稳定返回 `[]`。repository adapter 可在映射当前可选 TypeScript 字段时去掉 `null`。
 - 客户端提交的未知字段返回 `422 VALIDATION_FAILED`，不静默忽略。
 
@@ -52,13 +52,13 @@
 
 ### 2.2 身份、Cookie 与 CSRF
 
-- 匿名接口不要求 Cookie；所有 `/auth/me`、`/auth/sessions/**` 和 `/me/**` 接口要求有效 session。
-- 登录成功由服务端设置 `__Host-blog_session=<opaque-token>`，属性为 `HttpOnly; Secure; SameSite=Lax; Path=/`。本地 HTTP 开发环境可使用非 `__Host-` 开发 Cookie，生产必须使用前述配置。
+- 只有 `POST /auth/register` 与 `POST /auth/login` 允许匿名调用；已发布内容、`/auth/me`、`/auth/sessions/**` 和 `/me/**` 接口都要求有效 session。
+- 首次注册或登录成功由服务端设置 `__Host-blog_session=<opaque-token>`，属性为 `HttpOnly; Secure; SameSite=Lax; Path=/`。本地 HTTP 开发环境可使用非 `__Host-` 开发 Cookie，生产必须使用前述配置。
 - 数据库只保存 token 的 SHA-256 hash，不保存明文 token；Cookie 中的 token 只在创建或轮换时返回一次。
 - 所有改变状态的请求必须同时通过 `Origin`/`Host` 同源校验；浏览器请求不能只依赖 `SameSite` 防护。
-- 登录和 session 轮换响应使用 `Cache-Control: no-store`；受保护接口一律 `private, no-store`。
+- 注册、登录和 session 轮换响应使用 `Cache-Control: no-store`；受保护接口一律 `private, no-store`。
 - 客户端不能提交 `ownerId`。服务端从 session 得到唯一站长账号 ID，并在所有文章写查询中绑定该 ID。
-- 系统不存在注册、Web 初始化、密码找回、角色或成员管理 API；唯一账号由本地 `bootstrap-owner` CLI 管理。
+- 注册仅用于创建数据库中唯一站长账号，不使用 setup secret、邀请码或邮件验证。账号存在后永久返回 `409 REGISTRATION_CLOSED`；系统不提供密码找回、角色或成员管理 API。
 
 ### 2.3 Cursor pagination
 
@@ -97,15 +97,14 @@
 
 ### 2.5 Cache 与发布可见性
 
-- 公开 GET 只返回 `status = published AND deleted_at IS NULL` 的文章。
-- 公开列表建议返回 `Cache-Control: public, s-maxage=60, stale-while-revalidate=300`；公开详情可使用 `s-maxage=300, stale-while-revalidate=3600`。
-- 登录、草稿、归档、回收站、session、审计内容始终 `private, no-store`，不得进入公共 CDN cache。
-- 发布、撤回发布、归档、删除、恢复后由服务端使相关 post、taxonomy、archive、stats、search 和 sitemap cache tag 失效。
-- 对公开 GET 可根据稳定序列化结果返回弱 `ETag`；匹配 `If-None-Match` 时返回 `304`。
+- 已发布内容 GET 只返回 `status = published AND deleted_at IS NULL` 的文章，但仍要求有效 session。
+- 所有页面和 API 内容响应均为 `Cache-Control: private, no-store`，不得进入公共 CDN cache；草稿、归档、回收站、session 和审计同样禁止公共缓存。
+- 发布、撤回发布、归档、删除、恢复后仍使相关 post、taxonomy、archive、stats 和 search cache tag 失效，避免登录后的服务端派生缓存陈旧。
+- 认证内容接口不返回可被共享缓存复用的公共 `ETag`/`304`。
 
 ## 3. 核心 DTO
 
-### 3.1 公开内容 DTO
+### 3.1 已发布内容 DTO
 
 ```ts
 type LocalImageDto = {
@@ -192,7 +191,9 @@ type OwnerPostDto = {
 
 草稿可以暂时缺少发布必填字段，因此 `category`、`cover` 允许为 `null`，`body` 允许 `[]`；发布动作会执行完整校验。
 
-## 4. 公开读取接口
+## 4. 已发布内容读取接口（需认证）
+
+本节所有接口都要求唯一站长的有效 session，缺少、过期、伪造或已撤销 Cookie 返回 `401 AUTHENTICATION_REQUIRED`。以下 `curl` 示例为突出查询参数而省略重复的 `Cookie: __Host-blog_session=<opaque-token>` header。
 
 ### 4.1 接口总表
 
@@ -207,7 +208,7 @@ type OwnerPostDto = {
 | `GET` | `/categories` | `200` | `getAllCategories` | count 降序、name 升序 |
 | `GET` | `/categories/{slug}/posts` | `200` | `getPostsByCategory` | 合法空分类返回空列表 |
 | `GET` | `/search` | `200` | `getSearchIndex` + search | 标题、taxonomy、摘要分级匹配 |
-| `GET` | `/stats` | `200` | `getSiteStats` | 全部统计只基于公开文章派生 |
+| `GET` | `/stats` | `200` | `getSiteStats` | 全部统计只基于已发布文章派生 |
 | `GET` | `/sidebar` | `200` | `getSidebarData` | 组合接口，默认最近 4 篇 |
 
 ### 4.2 `GET /site`
@@ -347,7 +348,7 @@ taxonomy 列表：
 }
 ```
 
-taxonomy 文章列表返回 `PostSummaryDto[]`。slug 未在 taxonomy 表中定义时返回 404；slug 合法存在但没有公开文章时返回 `200`、`data: []`。
+taxonomy 文章列表返回 `PostSummaryDto[]`。slug 未在 taxonomy 表中定义时返回 404；slug 合法存在但没有已发布文章时返回 `200`、`data: []`。
 
 ### 4.7 `GET /search`
 
@@ -392,7 +393,26 @@ curl -sS 'https://blog.example.com/api/v1/sidebar?recentLimit=4'
 
 ## 5. 认证与 session 接口
 
-### 5.1 `POST /auth/login`
+### 5.1 `POST /auth/register`
+
+首次注册不要求 Cookie、setup secret、邀请码或邮件验证，但必须通过同源 Origin 校验和独立的全站单例限速预算：
+
+```bash
+curl -i 'https://blog.example.com/api/v1/auth/register' \
+  -H 'Content-Type: application/json' \
+  -H 'Origin: https://blog.example.com' \
+  --data '{"email":"owner@example.com","password":"correct horse battery staple","passwordConfirmation":"correct horse battery staple"}'
+```
+
+服务端严格校验 normalized email、密码规则和两次密码一致性；确认账号表为空后计算 Argon2id hash，并在一个参数化数据修改 CTE/等价短事务中创建 `owner_accounts`、`author_profiles`、缺失的 `site_settings` 与首个 `auth_sessions` 记录。成功返回 `201`、设置 session Cookie，并使用与登录相同的 account/session 响应结构。
+
+- `passwordConfirmation` 只用于入口校验，不写入数据库或日志。
+- display name 从邮箱 `@` 前缀派生；站长可在登录后通过 profile 接口修改。
+- 账号已存在，或并发注册中另一请求先提交时，返回 `409 REGISTRATION_CLOSED`，不得覆盖账号、profile、site settings 或 session。
+- 注册限速返回 `429 REGISTER_RATE_LIMITED` 和 `Retry-After`；注册与登录使用独立限速预算。
+- 注册数据库写入不可由客户端自动重试；收到未知结果时应先尝试登录或重新读取注册状态，避免把非幂等写入盲目重放。
+
+### 5.2 `POST /auth/login`
 
 ```bash
 curl -i 'https://blog.example.com/api/v1/auth/login' \
@@ -418,7 +438,7 @@ curl -i 'https://blog.example.com/api/v1/auth/login' \
 - 限速触发返回 `429 LOGIN_RATE_LIMITED` 和 `Retry-After`，不得泄露账号是否存在。
 - 密码校验使用 Argon2id（具体参数在实现时按部署环境基准测试固化），不得使用可逆加密或通用 SHA hash 代替 password hashing。
 
-### 5.2 Session 操作
+### 5.3 Session 操作
 
 | Method | Path | 行为 | 成功状态 |
 | --- | --- | --- | --- |
@@ -452,7 +472,7 @@ session 列表响应：
 }
 ```
 
-上述 session 接口都要求有效的唯一站长 session。所有受保护接口缺少、过期或已撤销 Cookie 时统一返回：
+除 logout 可在无有效 session 时幂等清除浏览器 Cookie 外，上述 session 接口都要求有效的唯一站长 session。所有受保护接口缺少、过期或已撤销 Cookie 时统一返回：
 
 ```json
 {
@@ -497,7 +517,7 @@ curl -sS -X PATCH 'https://blog.example.com/api/v1/me/profile' \
 
 - `PATCH` 不能修改 `status`、`publishedAtTime`、`archivedAt`、`deletedAt`、`ownerId` 或 `version`。
 - 已首次发布的文章 slug 永久锁定；修改返回 `409 SLUG_IMMUTABLE`。
-- 归档、撤回、删除均同步失效公开缓存；公开查询以数据库状态为最终判断，缓存失效失败不能让非公开文章继续从源站返回。
+- 归档、撤回、删除均同步失效相关服务端派生缓存；已发布内容查询以数据库状态为最终判断，不能让非发布文章继续返回。
 
 ### 7.2 接口总表
 
@@ -658,6 +678,7 @@ curl -sS -X DELETE 'https://blog.example.com/api/v1/me/posts/<id>' \
 | `403` | `ORIGIN_NOT_ALLOWED` | 写请求未通过同源校验 |
 | `404` | `RESOURCE_NOT_FOUND` | 资源不存在、非公开或不属于当前 owner |
 | `405` | `METHOD_NOT_ALLOWED` | 路径存在但 HTTP method 不受支持 |
+| `409` | `REGISTRATION_CLOSED` | 唯一账号已存在或并发首次注册失败 |
 | `409` | `VERSION_CONFLICT` | 乐观并发版本冲突 |
 | `409` | `SLUG_CONFLICT` | slug 已存在 |
 | `409` | `SLUG_IMMUTABLE` | 已首次发布文章尝试修改 slug |
@@ -666,6 +687,7 @@ curl -sS -X DELETE 'https://blog.example.com/api/v1/me/posts/<id>' \
 | `422` | `VALIDATION_FAILED` | 一般字段错误 |
 | `422` | `PUBLISH_VALIDATION_FAILED` | 发布完整性校验失败 |
 | `429` | `LOGIN_RATE_LIMITED` | 登录限速，携带 `Retry-After` |
+| `429` | `REGISTER_RATE_LIMITED` | 首次注册限速，携带 `Retry-After` |
 | `503` | `DATABASE_UNAVAILABLE` | Neon 暂时不可用；响应不得包含连接串 |
 | `500` | `INTERNAL_ERROR` | 未分类错误；只向客户端返回 request ID |
 
@@ -673,7 +695,7 @@ curl -sS -X DELETE 'https://blog.example.com/api/v1/me/posts/<id>' \
 
 ## 10. 重试边界
 
-- 客户端可有限重试幂等 GET；遇到 `429` 尊重 `Retry-After`，遇到 `503` 使用抖动退避。
+- 客户端可有限重试幂等 GET；遇到 `429` 尊重 `Retry-After`，遇到 `503` 使用抖动退避。首次注册不是幂等重试接口。
 - 服务端仅自动重试尚未向客户端提交响应的幂等读取，或有 `Idempotency-Key` 且能够读取首次结果的创建请求。
 - `PATCH`、发布、撤回、归档、删除、恢复和 session 轮换默认不自动重试；调用方应重新读取资源并根据 `version` 决定。
 - PostgreSQL serialization/deadlock 重试必须重放整个短事务，最多有限次数；不能只重跑事务中的最后一条 SQL。
@@ -685,10 +707,10 @@ curl -sS -X DELETE 'https://blog.example.com/api/v1/me/posts/<id>' \
 | `SiteConfig` | `GET /site` | `site_settings` + `author_profiles` + taxonomy definitions |
 | `PostSummary` | `GET /posts` | `posts` + category/tags；word count/read time派生 |
 | `PostDetail` | `GET /posts/{slug}` | summary + `body`；toc 与前后篇派生 |
-| `TaxonomySummary` | `GET /tags`, `/categories` | definition + 公开文章 count |
+| `TaxonomySummary` | `GET /tags`, `/categories` | definition + 已发布文章 count |
 | `ArchiveYearGroup` | `GET /archives` | `published_at` 年份分组 |
-| `SearchDocument` | `GET /search` | 公开文章 title/excerpt/category/tag 投影 |
-| `SiteStats` | `GET /stats` | 公开文章、非空 taxonomy、年份 count |
-| `SidebarData` | `GET /sidebar` | 上述公开 DTO 的组合结果 |
+| `SearchDocument` | `GET /search` | 已发布文章 title/excerpt/category/tag 投影 |
+| `SiteStats` | `GET /stats` | 已发布文章、非空 taxonomy、年份 count |
+| `SidebarData` | `GET /sidebar` | 上述已发布内容 DTO 的组合结果 |
 
-公开 DTO adapter 必须保持 [`lib/content/repository.ts`](../../../lib/content/repository.ts) 的排序和未知/空 taxonomy 语义，页面不直接依赖数据库行结构。
+已发布内容 DTO adapter 必须保持 [`lib/content/repository.ts`](../../../lib/content/repository.ts) 的排序和未知/空 taxonomy 语义，页面不直接依赖数据库行结构。

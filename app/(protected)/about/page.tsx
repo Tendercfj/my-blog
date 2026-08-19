@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 
 import { FullWidthLayout } from "@/components/site/page-layout";
+import { requireCurrentSession } from "@/lib/auth/session";
 import { getSiteConfig } from "@/lib/content/repository";
 
 export const metadata: Metadata = {
@@ -11,6 +12,7 @@ export const metadata: Metadata = {
 };
 
 export default async function AboutPage() {
+  await requireCurrentSession();
   const site = await getSiteConfig();
   const about = site.about;
 

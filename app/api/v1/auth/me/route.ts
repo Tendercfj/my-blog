@@ -2,7 +2,8 @@ import type { NextRequest } from "next/server";
 
 import { ApiProblem } from "@/lib/api/problem";
 import { createRequestId, errorResponse, jsonData } from "@/lib/api/response";
-import { findSessionByToken, sessionCookieName } from "@/lib/auth/session";
+import { sessionCookieName } from "@/lib/auth/cookie";
+import { findSessionByToken } from "@/lib/auth/session";
 
 export const runtime = "nodejs";
 

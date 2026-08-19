@@ -3,6 +3,7 @@ import { FolderTree } from "lucide-react";
 
 import { CategoryList } from "@/components/blog/category-list";
 import { FullWidthLayout } from "@/components/site/page-layout";
+import { requireCurrentSession } from "@/lib/auth/session";
 import { getAllCategories } from "@/lib/content/repository";
 
 export const metadata: Metadata = {
@@ -11,6 +12,7 @@ export const metadata: Metadata = {
 };
 
 export default async function CategoriesPage() {
+  await requireCurrentSession();
   const categories = await getAllCategories();
   return (
     <FullWidthLayout>

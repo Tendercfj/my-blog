@@ -40,5 +40,6 @@
 ## 当前验证边界
 
 - 本任务未连接真实 Neon、未读取 Secret、未执行远程 SQL。
-- 当前机器没有 `psql` 或 SQL parser；`schema.sql` 仅完成结构、括号、语句边界和文档一致性静态检查。
+- 当前机器没有 `psql` 或 SQL parser，Docker CLI 存在但 daemon 未运行；未启动本地 PostgreSQL，也未连接远程 Neon。
+- `schema.sql` 已完成词法静态检查：完整文件只有一个顶层 `DO` statement，内部 53 个 `$ddl$` 动态 command 均有配对 delimiter；相对原 baseline 的 52 个 DDL/comment 对象签名与顺序全部保留，并新增 `auth_rate_limits.key_kind` 注释。
 - 实际 PostgreSQL 执行必须在后续获批实施阶段使用 disposable local database 或隔离 Neon branch 验证。

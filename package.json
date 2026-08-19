@@ -5,6 +5,7 @@
   "scripts": {
     "auth:bootstrap": "node scripts/bootstrap-owner.mjs",
     "auth:reset-password": "node scripts/reset-owner-password.mjs",
+    "schema:verify": "node scripts/verify-schema-query.mjs",
     "dev": "next dev --experimental-https",
     "build": "next build",
     "start": "next start",

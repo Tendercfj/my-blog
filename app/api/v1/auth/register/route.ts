@@ -4,8 +4,8 @@ import { ApiProblem } from "@/lib/api/problem";
 import { createRequestId, errorResponse, jsonData } from "@/lib/api/response";
 import { sessionCookie } from "@/lib/auth/cookie";
 import { isSameOrigin } from "@/lib/auth/origin";
-import { loginOwner } from "@/lib/auth/service";
-import { loginInputSchema } from "@/lib/auth/validation";
+import { registerOwner } from "@/lib/auth/service";
+import { registerInputSchema } from "@/lib/auth/validation";
 
 export const runtime = "nodejs";
 
@@ -24,17 +24,18 @@ export async function POST(request: NextRequest) {
       throw new ApiProblem(400, "INVALID_JSON", "请求 JSON 无法解析");
     }
 
-    const input = loginInputSchema.parse(body);
-    const { owner, issued } = await loginOwner(input);
+    const input = registerInputSchema.parse(body);
+    const { owner, issued } = await registerOwner(input, new URL(request.url).origin);
     const response = jsonData(
       {
-        account: { id: owner.id, email: owner.email },
+        account: owner,
         session: {
           id: issued.session.id,
           expiresAt: issued.session.expiresAt.toISOString(),
         },
       },
       requestId,
+      { status: 201 },
     );
     response.cookies.set(sessionCookie(issued.token, issued.session.expiresAt));
     return response;

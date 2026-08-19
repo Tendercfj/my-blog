@@ -5,8 +5,8 @@ import { PostBody } from "@/components/blog/post-body";
 import { PostHero } from "@/components/blog/post-hero";
 import { StandardTwoColumnLayout } from "@/components/site/page-layout";
 import { BlogSidebar } from "@/components/sidebar/blog-sidebar";
+import { requireCurrentSession } from "@/lib/auth/session";
 import {
-  getAllPosts,
   getPostBySlug,
   getSidebarData,
   getSiteConfig,
@@ -16,13 +16,8 @@ import { routes } from "@/lib/routes";
 
 type PageProps = { params: Promise<{ slug: string }> };
 
-export const dynamicParams = false;
-
-export async function generateStaticParams() {
-  return (await getAllPosts()).map((post) => ({ slug: post.slug }));
-}
-
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  await requireCurrentSession();
   const { slug } = await params;
   const [site, post] = await Promise.all([getSiteConfig(), getPostBySlug(slug)]);
   if (!post) notFound();
@@ -35,6 +30,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 }
 
 export default async function PostPage({ params }: PageProps) {
+  await requireCurrentSession();
   const { slug } = await params;
   const [post, sidebar] = await Promise.all([getPostBySlug(slug), getSidebarData()]);
   if (!post) notFound();

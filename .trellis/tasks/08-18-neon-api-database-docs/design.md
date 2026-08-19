@@ -9,25 +9,30 @@
 | 数据库 | Neon PostgreSQL |
 | 认证 | 项目自研邮箱密码 + opaque session |
 | 数据访问 | SQL-first repository + `@neondatabase/serverless` |
-| 当前交付 | 设计、API 契约、baseline SQL 与已批准的登录认证切片 |
-| 当前不执行 | 远程建库/SQL、公开内容 Neon 切换、文章 CRUD/action 与编辑 UI |
+| 当前交付 | 设计/API/SQL 同步、首次 Web 注册、全站 session 保护与登录页 UI |
+| 当前不执行 | 远程建库/SQL、内容 Neon 切换、文章 CRUD/action 与编辑 UI |
 
 ## 2. 方案摘要
 
-本方案保留现有页面只依赖 `lib/content/repository.ts` 的边界，在 repository 后新增 Neon adapter；React Server Components 直接调用服务端 repository，不绕行本项目 HTTP API。`app/api/v1/**` Route Handlers 与页面复用同一 application service、验证器和 SQL repository，从而避免公开页面与 API 出现两套统计、排序或状态规则。
+本方案保留现有页面只依赖 `lib/content/repository.ts` 的边界。`app/(protected)/layout.tsx` 在读取站点内容前完成数据库 session 校验，统一保护首页、文章、taxonomy、归档、关于和账号页面；根 `proxy.ts` 仅根据 Cookie 是否存在做快速重定向，不能替代权威校验。内容 Route Handlers 同样在各自入口调用 session guard，因此匿名用户既看不到页面也不能绕过页面直接读取内容 API。
 
-唯一站长账号通过本地 `bootstrap-owner` CLI 初始化，以邮箱和密码登录。浏览器获得高熵 opaque session Cookie，数据库只保存 token hash。站长文章写操作使用短事务、参数化 SQL、乐观并发、action 状态机和同事务审计；公开读取永远从 `blog.public_posts` 的可见性边界开始。
+唯一站长账号可在 `/login` 完成无 setup secret 的首次注册，也可继续通过本地 `bootstrap-owner` CLI 离线初始化。注册服务在 Argon2id hash 完成后，用单条数据修改 CTE/等价短事务原子创建账号、默认 profile、缺失的 site settings 与首个 opaque session；`singleton_key = 1` 的 UNIQUE 约束决定并发注册唯一胜者。浏览器只获得高熵 token Cookie，数据库只保存 token hash。
 
-运行时使用 Neon pooled connection，migration、bootstrap 和凭据恢复使用 direct connection。设计不依赖 PgBouncer transaction mode 无法保证的 session 状态。
+运行时注册与 session 查询使用 Neon pooled connection，migration、bootstrap 和凭据恢复使用 direct connection。设计不依赖 PgBouncer transaction mode 无法保证的 session 状态，也不在本切片连接真实 Neon 或切换内容 repository。
 
 ## 3. 架构边界
 
 ```mermaid
 flowchart TB
-    Browser["浏览器"] --> Pages["App Router 页面 / Server Components"]
+    Browser["浏览器"] --> Proxy["proxy.ts · Cookie 存在性检查"]
+    Proxy --> Login["/login · 登录 / 首次注册"]
+    Proxy --> Protected["(protected)/layout · DB session 校验"]
+    Protected --> Pages["业务页面 / Server Components"]
     Browser --> API["/api/v1 Route Handlers"]
+    Login --> Register["POST /auth/register"]
     Pages --> Domain["Content application services"]
     API --> Auth["Session / Origin / rate-limit guards"]
+    Register --> Auth
     Auth --> Domain
     Domain --> Repo["Domain repository interface"]
     Repo --> Local["现有 local adapter（迁移/回滚期）"]
@@ -41,12 +46,20 @@ flowchart TB
 
 ### 3.1 请求路径
 
-公开页面：
+受保护页面：
 
-1. Server Component 调用 domain repository。
-2. Neon adapter 从 `blog.public_posts` 和 taxonomy 表查询。
-3. adapter 把数据库行映射为当前 `PostSummary` / `PostDetail` 等领域类型。
-4. 页面继续使用现有组件，不了解 UUID、状态、session 或数据库列。
+1. `proxy.ts` 对缺少 session Cookie 的页面导航乐观重定向到 `/login`，并保留经过校验的站内 `next` 路径。
+2. `app/(protected)/layout.tsx` 调用 `requireCurrentSession()` 查询数据库；伪造、过期或已撤销 Cookie 跳转 `/login`。
+3. session 有效后，Server Component 才调用现有 local domain repository；后续切换 Neon adapter 时仍从 `blog.public_posts` 和 taxonomy 表查询已发布集合。
+4. 页面继续使用现有组件，不了解 token、session 表或数据库列。
+
+首次注册：
+
+1. `/login` 客户端表单提交 email、password、passwordConfirmation 到 `POST /api/v1/auth/register`。
+2. Route Handler 校验 JSON、Origin 和 DTO；service 执行独立的全站 registration 限速并检查 singleton 是否已存在。
+3. Argon2id hash 与 session token/hash 在事务外计算。
+4. repository 以一个参数化原子写入创建 owner、profile、缺失的 site settings 和 session；数据库 UNIQUE 约束仲裁并发请求。
+5. 成功响应设置 HttpOnly Cookie 并跳转 `/account`；账号已存在或竞争失败统一映射为 `409 REGISTRATION_CLOSED`。
 
 站长写请求：
 
@@ -54,16 +67,24 @@ flowchart TB
 2. service 从 session 取得唯一 `ownerId`，忽略或拒绝客户端的身份字段。
 3. service 校验 DTO 与状态动作，repository 执行带 `owner_id`、`version` 的参数化 SQL。
 4. 文章变更、tag 关系与 audit event 在同一短事务中提交。
-5. 提交成功后失效公开 cache tags；失败时不产生部分写入。
+5. 提交成功后失效已发布内容 cache tags；失败时不产生部分写入。
 
 ### 3.2 不通过内部 HTTP 调用自己
 
-Server Components、metadata、sitemap 和 Route Handlers 均运行在服务端。页面不得通过 `fetch('/api/v1/...')` 读取本应用 API，这会增加一次网络跳转、重复序列化并使认证/缓存语义复杂化。HTTP API 供浏览器编辑能力或外部只读调用；服务端内部直接复用 service/repository。
+Server Components、metadata 和 Route Handlers 均运行在服务端。页面不得通过 `fetch('/api/v1/...')` 读取本应用 API，这会增加一次网络跳转、重复序列化并使认证/缓存语义复杂化。HTTP API 供浏览器交互调用；服务端内部直接复用 service/repository。受保护 metadata 与页面共享 route group，`sitemap` 不列出登录后 URL，`robots` 禁止索引整个站点。
 
 ## 4. 建议目录
 
 ```text
 app/
+├── (auth)/
+│   └── login/page.tsx
+├── (protected)/
+│   ├── layout.tsx
+│   ├── page.tsx
+│   ├── account/page.tsx
+│   └── ...现有业务页面
+├── layout.tsx                    # 仅保留 html/body、主题和通用背景
 └── api/v1/
     ├── site/route.ts
     ├── posts/route.ts
@@ -77,6 +98,7 @@ app/
     ├── stats/route.ts
     ├── sidebar/route.ts
     ├── auth/
+    │   ├── register/route.ts
     │   ├── login/route.ts
     │   ├── logout/route.ts
     │   ├── refresh/route.ts
@@ -99,6 +121,7 @@ lib/
 ├── auth/
 │   ├── password.ts
 │   ├── session.ts
+│   ├── registration.ts
 │   ├── cookie.ts
 │   ├── origin.ts
 │   └── rate-limit.ts
@@ -133,6 +156,8 @@ scripts/
 db/
 └── migrations/
     └── 0001_baseline.sql
+
+proxy.ts                           # 仅做缺 Cookie 的乐观页面重定向
 ```
 
 当前任务只在 Trellis 任务目录产出设计文件；以上是后续批准实施时的目标结构。
@@ -156,6 +181,7 @@ db/
 首选 `@neondatabase/serverless`：
 
 - one-shot 查询使用 `neon(DATABASE_URL)` 的 HTTP 模式；
+- baseline `schema.sql` 是单一顶层 `DO` statement，可将完整文件作为一次 `neon().query()`/prepared Query 发送；匿名块逐条动态执行 DDL，任一失败则整个 statement 回滚；仍须使用具备 migration 权限的 direct connection，不能走 runtime role；
 - 多语句但不需要中途应用决策的短事务使用 driver 的 non-interactive transaction；
 - 需要条件写入的流程优先合并为参数化 CTE，例如 `UPDATE ... WHERE version = $n RETURNING` + audit insert；
 - 当前工作流不要求长期 session 或跨请求事务，因此不引入常驻 client。
@@ -213,11 +239,11 @@ erDiagram
 
 以下值不作为多份事实持久化：
 
-- taxonomy `count`：从公开文章关系 count；
+- taxonomy `count`：从已发布文章关系 count；
 - archive 年份与站点 years：从 `published_at`；
 - `wordCount` / `readingMinutes`：复用当前 `derive.ts` 的 CJK + Latin 算法从 blocks 计算；
 - TOC：从 heading blocks 生成；
-- previous/next：在公开时间线按 `published_at DESC, id DESC` 计算；
+- previous/next：在已发布时间线按 `published_at DESC, id DESC` 计算；
 - search document：从文章、category 和 tags 投影。
 
 若性能数据证明按请求计算不可接受，可以增加带明确刷新策略的物化层；MVP 不先复制事实。
@@ -240,23 +266,33 @@ erDiagram
 
 ## 7. 认证设计
 
-### 7.1 初始账号
+### 7.1 首次注册与离线初始化
 
-`bootstrap-owner` CLI：
+Web 首次注册：
+
+1. `/login` 是唯一匿名页面，提供“登录 / 首次注册”切换；不创建独立 `/register` 页面。
+2. 注册请求必须同源，严格接收 normalized email、password、passwordConfirmation；确认字段只用于入口校验。
+3. 注册不要求 setup secret、邀请码或邮件验证。用户已接受公网部署后非站长可能抢先占用唯一账号的风险。
+4. service 在 hash 前检查账号是否存在以减少无意义的 Argon2id 开销，但最终正确性只依赖数据库 `singleton_key` UNIQUE 约束。
+5. Argon2id hash、opaque token 与 token hash 在事务外计算；owner/profile/site/session 使用一个参数化数据修改 CTE/等价短事务原子提交。
+6. 账号已存在或并发竞争失败统一返回 `409 REGISTRATION_CLOSED`；不得 upsert、覆盖凭据或留下无 session 的半初始化账号。
+7. 注册成功设置与登录相同的安全 Cookie 并进入 `/account`。
+
+`bootstrap-owner` CLI 保留为可选离线初始化：
 
 1. 只读取 `DATABASE_URL_UNPOOLED`。
 2. 交互式读取 normalized email 和隐藏密码；密码不得作为命令行参数，避免进入 shell history/process list。
 3. 在连接数据库前完成密码强度校验和 Argon2id hash。
 4. 事务内插入 `owner_accounts`、`author_profiles` 和缺失的 `site_settings` 初始行。
-5. 如果账号已经存在，明确失败，不执行 upsert 或覆盖密码。
+5. 如果 Web 注册已创建账号，明确失败，不执行 upsert 或覆盖密码。
 6. 成功日志只输出账号 ID/email，不输出 password、hash 或连接串。
 
-凭据恢复使用独立 `reset-owner-password` CLI：
+凭据恢复继续使用独立 `reset-owner-password` CLI：
 
 1. 用 direct connection 锁定唯一账号行。
 2. 在事务内更新 `password_hash`、`password_changed_at`，并把该账号所有未撤销 session 标记为 revoked。
 3. 事务失败则密码与 session 状态都不改变。
-4. 不提供邮件、Web token 或隐藏注册 URL。
+4. 不提供邮件、Web token 或浏览器密码找回流程。
 
 ### 7.2 Password hashing
 
@@ -270,15 +306,16 @@ erDiagram
 - token 使用 CSPRNG 生成至少 256 bit 随机值，以 base64url 放入 Cookie。
 - 数据库存 `SHA-256(token)` 的 32-byte `bytea`；查询时对客户端 token 计算 hash 后参数化匹配。
 - session 有绝对过期时间；`refresh` 轮换 token，旧记录先撤销或在同一事务中替换。
-- `last_seen_at` 节流更新，例如最多每 5 分钟一次，避免每个公开请求写数据库。
+- `last_seen_at` 节流更新，例如最多每 5 分钟一次，避免每个受保护请求都写数据库。
 - logout/revoke/reset-password 都以数据库 `revoked_at` 为权威；清 Cookie 只是浏览器清理，不是撤销机制。
 
-### 7.4 登录限速与防枚举
+### 7.4 注册/登录限速与防枚举
 
-- 同时对 normalized email 和可信客户端 IP 的 HMAC key 计数，数据库不保存原始 IP。
-- 只有在已配置并信任部署代理时读取其转发 IP header；不得信任任意客户端传入的 `X-Forwarded-For`。
+- 登录对 normalized email 的 HMAC key 计数；首次注册对固定的 singleton registration scope 做 HMAC，使用 `login_email` / `register_global` 隔离预算。数据库不保存原始 email。
+- 单账号全站预算避免信任不可靠的客户端 IP header，也限制账号为空时的 Argon2id 资源消耗。
 - 不存在账号与密码错误使用相同响应、近似计算成本和同一限速规则。
-- 触发限速返回 `429` 和 `Retry-After`；具体窗口/阈值在实现阶段通过配置和测试固化。
+- 注册关闭返回 `409 REGISTRATION_CLOSED`；注册/登录触发限速分别返回稳定的 `429 REGISTER_RATE_LIMITED` / `LOGIN_RATE_LIMITED` 和 `Retry-After`。
+- Web 注册直接开放的抢注风险不由限速消除；限速只控制滥用和 Argon2id 资源消耗。
 
 ## 8. 文章状态与事务
 
@@ -330,11 +367,11 @@ RETURNING *;
 
 ## 9. 查询与搜索
 
-### 9.1 公开可见性
+### 9.1 已发布内容可见性
 
-所有公开查询从 `blog.public_posts` view 开始。即使调用方已用 slug 定位，也不能从 `blog.posts` 读取后在 TypeScript 中再判断状态，否则 cache、metadata 或错误分支容易泄露草稿。
+所有已发布内容查询从 `blog.public_posts` view 开始，但调用前仍需验证唯一站长 session。即使调用方已用 slug 定位，也不能从 `blog.posts` 读取后在 TypeScript 中再判断状态，否则 metadata 或错误分支容易泄露草稿。
 
-未知 post、非公开 post 和已删除 post 对匿名调用统一为 404。taxonomy 先从 definition 表查询：definition 不存在为 404；存在但关联公开文章为 0 时返回 200 + `[]`。
+未认证 API 调用先统一返回 401，不根据 slug 是否存在改变响应。认证后，未知、非公开或已删除 post 返回 404；taxonomy definition 不存在为 404，存在但关联已发布文章为 0 时返回 200 + `[]`。
 
 ### 9.2 Search
 
@@ -350,36 +387,27 @@ MVP 使用 `pg_trgm` 支持中英文子串搜索，同时保持当前权重：ti
 
 ## 10. Next.js 渲染与缓存
 
-### 10.1 动态内容对现有页面的影响
+### 10.1 Route groups 与权威保护
 
-当前 post/tag/category 动态页导出 `dynamicParams = false`，只允许构建时已知 slug。接入发布流程后必须移除该限制或改为允许动态参数，否则新发布文章会在下一次 build 前持续 404。
+- `app/layout.tsx` 只保留 `<html>/<body>`、全局 CSS、主题启动脚本和不读取博客内容的视觉背景。
+- `/login` 移入 `app/(auth)/login/page.tsx`，服务端发现有效 session 时重定向 `/account`。
+- 首页、account、about、archives、tags、categories、posts 等现有页面保持原 URL，但文件移入 `app/(protected)/**`。
+- `app/(protected)/layout.tsx` 在渲染 Header、SearchProvider、Footer 或任何页面内容前调用 `requireCurrentSession()`；无效 session 重定向 `/login`。
+- 因 `cookies()` 参与渲染，受保护页面按请求动态执行，不能再依赖匿名静态预渲染。现有 `generateStaticParams` 可保留路由提示，但不能绕过 layout 授权。
+- `robots.ts` 禁止索引整个站点；`sitemap.ts` 不列出受保护 URL，也不列出 noindex 的 `/login`。
 
-建议：
+### 10.2 Proxy 的有限职责
 
-- 页面保留 Server Components；
-- `dynamicParams` 使用默认 `true`；
-- `generateStaticParams` 可只作热门内容预热，也可移除，不能成为新内容可见性的前置条件；
-- `generateMetadata`、sitemap、页面和 API 复用同一公开 repository；
-- 新发布内容通过 cache tag invalidation 在运行时生效，不要求重新部署。
+根 `proxy.ts` 依据 Next.js 16 约定实现，并排除 `/api/**`、`/_next/static/**`、`/_next/image/**`、`/images/**`、favicon 与必要 metadata/static 请求：
 
-### 10.2 Cache tags
+- 无 session Cookie 的页面导航重定向 `/login`，可携带仅允许站内绝对路径的 `next`；
+- `/login` 始终允许到达 page，由 page 的数据库校验决定是否跳转 `/account`；
+- Proxy 不访问 Neon、不验证 opaque token、不做账号授权；Cookie 存在不代表有效 session；
+- API 不由 Proxy 返回 HTML redirect，各 Route Handler 自己返回 JSON 401/403。
 
-建议 tag：
+### 10.3 Cache
 
-| Tag | 数据 |
-| --- | --- |
-| `site` | 站点/作者配置 |
-| `posts` | 公开文章列表与 recent |
-| `post:{slug}` | 单篇详情/metadata |
-| `archives` | 归档 |
-| `tags` / `tag:{slug}` | 标签总览/详情 |
-| `categories` / `category:{slug}` | 分类总览/详情 |
-| `search` | 搜索投影 |
-| `stats` | 统计与 sidebar |
-
-发布或公开文章内容更新时失效对应 post、列表、taxonomy、archive、search、stats、sitemap。撤回、归档和删除必须先提交数据库，再失效同一组 tag；失效失败记录告警并允许较短 TTL 自动收敛。受保护数据不使用公共 cache。
-
-具体采用 Next.js 16 当前稳定的 cache API 时，应封装在 repository/cache adapter 中，避免页面组件散布 cache key。`api.md` 的 HTTP cache header 与服务端数据 cache 是两层独立机制，均不能缓存草稿。
+全站内容需要认证，页面和内容 API 使用 `private, no-store`，不进入公共 CDN cache。若后续为服务端 repository 引入跨请求 cache，cache key 必须包含明确的认证边界，并在发布、撤回、归档、删除和恢复后失效；本切片不新增该复杂度。
 
 ## 11. API Route Handler 设计
 
@@ -393,7 +421,7 @@ MVP 使用 `pg_trgm` 支持中英文子串搜索，同时保持当前权重：ti
 6. 把 domain error 映射为统一 envelope/status；
 7. 设置 Cookie、cache header 和可观测性字段。
 
-业务状态机、SQL、password 逻辑不能直接写在 `route.ts`。所有 auth 和 mutation Route Handlers 使用 Node.js runtime，避免 Argon2 实现与 Edge runtime 的兼容不确定性；公开读取也先统一 Node runtime，只有获得性能证据后再拆分。
+业务状态机、SQL、password 逻辑不能直接写在 `route.ts`。注册、login 和 mutation Route Handlers 使用 Node.js runtime，避免 Argon2 实现与 Edge runtime 的兼容不确定性；内容读取也先统一 Node runtime，只有获得性能证据后再拆分。
 
 ## 12. 迁移方案
 
@@ -401,7 +429,7 @@ MVP 使用 `pg_trgm` 支持中英文子串搜索，同时保持当前权重：ti
 
 1. 在隔离 Neon branch 使用 direct connection 执行 baseline migration。
 2. 运行 schema 静态/临时数据库验证，确认约束、trigger 和 index。
-3. 运行 `bootstrap-owner` 创建唯一账号、profile 和 site settings。
+3. 使用 Web 首次注册或 `bootstrap-owner` 二选一创建唯一账号、profile 和 site settings；在隔离环境测试并发注册只成功一次。
 4. 用 `import-local-content` 导入 `content/site.ts` 与 `content/posts.ts`：先 taxonomy，再 posts/tag relations；保留现有 slug 与发布日期。
 5. 对数据库 adapter 与 local adapter 执行契约对照：数量、排序、slug、DTO、前后篇、word count、taxonomy count、搜索结果。
 6. 通过 server-only feature flag 将 read source 从 local 切到 Neon。
@@ -413,12 +441,14 @@ MVP 使用 `pg_trgm` 支持中英文子串搜索，同时保持当前权重：ti
 - schema 部署失败：丢弃隔离 Neon branch；不对生产库做手工逆向删除。
 - import 失败：回滚 import transaction 或重建 branch；local content 保持事实源。
 - runtime 读取失败：feature flag 切回 local adapter，保留 Neon 数据以便诊断。
-- 写功能上线后发生问题：暂停 mutation UI/API，公开读取可继续从 Neon 或 local；不得用回滚代码覆盖已写入文章。
+- 注册/全站保护上线后发生问题：可回滚应用代码到仅登录基线，但不得删除已创建账号或恢复匿名内容访问；已创建账号数据只能由显式数据变更处理。
+- 写功能上线后发生问题：暂停 mutation UI/API，认证后的读取可继续从 Neon 或 local；不得用回滚代码覆盖已写入文章。
 - 任何 destructive migration 必须另立任务、备份/branch 验证并获得用户批准；不属于本 baseline。
 
 ## 13. 权限与运维边界
 
 - migration role 拥有 schema DDL；runtime role 只有 `blog` schema 使用权和所需表 DML，不授予 `CREATE`。
+- runtime role 仅获得首次注册需要的 owner/profile/site 列级 INSERT，以及 session/rate-limit 所需 DML；单例约束仍是拒绝第二账号的最终边界。
 - baseline SQL 不创建真实 role 或 Secret，role 名只在部署步骤中配置。
 - 当前单账号并不降低认证要求：数据库公网可达、Cookie 泄露或未认证 Route Handler 仍会造成完整站点被篡改。
 - 不把 `neondb_owner` 作为运行时应用账号。
@@ -430,7 +460,7 @@ MVP 使用 `pg_trgm` 支持中英文子串搜索，同时保持当前权重：ti
 - 每个请求有 UUID request ID；audit event 保存 request ID，日志只保存结构化 code、route、duration、数据库错误类别。
 - PostgreSQL constraint name 映射到稳定 domain error；客户端永远看不到 SQL、stack、表名或连接详情。
 - Neon transient failure 对幂等读取做有限重试；mutation 只有在幂等语义完整时重试。
-- 记录 login 成功/失败计数但不记录密码、Cookie、token/hash 或完整原始 IP。
+- 记录 register/login 成功、关闭、失败和限速计数，但不记录密码、Cookie、token/hash、完整 email 或原始 IP。
 - audit `changes` 只保存必要字段变化摘要，不复制完整正文，避免审计表成为第二份内容事实和敏感数据扩散点。
 
 ## 15. 测试策略
@@ -446,7 +476,8 @@ MVP 使用 `pg_trgm` 支持中英文子串搜索，同时保持当前权重：ti
 
 ### 15.2 Service/API
 
-- 登录枚举防护、限速、Cookie flags、session 轮换与撤销。
+- 首次注册成功原子创建四类记录并签发 Cookie；第二次与并发失败均为 `409 REGISTRATION_CLOSED` 且无部分数据。
+- 注册/登录输入校验、独立限速、Cookie flags、session 轮换与撤销。
 - 所有受保护端点无 Cookie/过期 Cookie 为 401，Origin 错误为 403。
 - 同一 `Idempotency-Key` 同 payload 返回同结果，不同 payload 为 409。
 - version 冲突不覆盖新数据；编辑 tag 失败不会留下部分关系。
@@ -455,7 +486,14 @@ MVP 使用 `pg_trgm` 支持中英文子串搜索，同时保持当前权重：ti
 - 未知 taxonomy 为 404，合法空 taxonomy 为 200 空数组。
 - cursor 篡改、错筛选上下文和越界 limit 返回稳定错误。
 
-### 15.3 领域契约
+### 15.3 页面与 Proxy
+
+- 无 Cookie 访问每个业务 URL 均跳转 `/login`；静态资源、Next.js runtime 和 auth API 不进入重定向循环。
+- 伪造、过期、已撤销 Cookie 虽可通过 Proxy 的存在性检查，但会被 protected layout 的数据库校验拒绝。
+- 有效 session 可访问原 URL；访问 `/login` 会跳转 `/account`，logout 后返回 `/login`。
+- 内容 API 未认证时返回 JSON 401，而不是 307/HTML；`robots` 与 sitemap 不暴露可索引的受保护页面。
+
+### 15.4 领域契约
 
 对同一 fixture 同时调用 local/neon adapter，比较：
 
@@ -475,8 +513,9 @@ MVP 使用 `pg_trgm` 支持中英文子串搜索，同时保持当前权重：ti
 | opaque session | 易撤销、服务端可控，不把身份状态放入可长期使用的 token | 每次受保护请求需查询 session |
 | `jsonb` blocks | 保留顺序和判别联合，避免 HTML 注入与过度拆表 | 完整结构必须由应用 validator 保证 |
 | trigram search | 中英文子串语义接近当前实现，无额外搜索服务 | 大规模语义搜索能力有限 |
-| public view + repository | 可见性规则集中、页面契约稳定 | 需要避免其他代码绕过 view |
-| CLI bootstrap/recovery | 无公开初始化/找回攻击面，适合个人博客 | 站长恢复凭据需要本地/部署终端权限 |
+| published view + repository | 发布状态规则集中、页面契约稳定 | 仍须在 view 查询前验证 session |
+| 无 secret 首次 Web 注册 | 部署后可直接在 `/login` 初始化，不依赖终端 | 公网暴露到注册完成前存在唯一账号被抢占的已接受风险 |
+| CLI bootstrap/recovery | 保留离线初始化和安全恢复能力 | 需要本地/部署终端权限 |
 
 ## 17. 官方参考
 

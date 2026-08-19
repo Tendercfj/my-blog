@@ -1,15 +1,28 @@
 -- Baseline schema for the single-owner blog.
 -- Target: PostgreSQL on Neon. Run once against an empty database with a
 -- migration/direct connection (DATABASE_URL_UNPOOLED), never from a browser.
+-- The complete file is one top-level DO statement so it can be sent once via
+-- neon().query(), sql.query(), or another prepared-statement Query API.
+-- Every DDL command is executed separately inside the anonymous block. The DO
+-- statement is atomic: if one command fails, PostgreSQL rolls back the whole
+-- baseline. Do not prepend BEGIN or append COMMIT to the query text.
 -- Runtime/migration role creation and real credentials are intentionally omitted.
 
-BEGIN;
+DO $baseline$
+BEGIN
+    EXECUTE $ddl$
+CREATE EXTENSION IF NOT EXISTS pgcrypto
+$ddl$;
 
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
-CREATE EXTENSION IF NOT EXISTS pg_trgm;
+    EXECUTE $ddl$
+CREATE EXTENSION IF NOT EXISTS pg_trgm
+$ddl$;
 
-CREATE SCHEMA IF NOT EXISTS blog;
+    EXECUTE $ddl$
+CREATE SCHEMA IF NOT EXISTS blog
+$ddl$;
 
+    EXECUTE $ddl$
 CREATE TABLE blog.owner_accounts (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     singleton_key smallint NOT NULL DEFAULT 1,
@@ -29,13 +42,19 @@ CREATE TABLE blog.owner_accounts (
     ),
     CONSTRAINT owner_accounts_password_hash_ck CHECK (char_length(password_hash) BETWEEN 20 AND 1024),
     CONSTRAINT owner_accounts_version_ck CHECK (version > 0)
-);
+)
+$ddl$;
 
+    EXECUTE $ddl$
 COMMENT ON TABLE blog.owner_accounts IS
-    'Exactly zero or one owner account. singleton_key=1 plus UNIQUE prevents a second account.';
+    'Exactly zero or one owner account. singleton_key=1 plus UNIQUE prevents a second account.'
+$ddl$;
+    EXECUTE $ddl$
 COMMENT ON COLUMN blog.owner_accounts.password_hash IS
-    'Algorithm-encoded password hash only; never plaintext or reversible ciphertext.';
+    'Algorithm-encoded password hash only; never plaintext or reversible ciphertext.'
+$ddl$;
 
+    EXECUTE $ddl$
 CREATE TABLE blog.author_profiles (
     account_id uuid PRIMARY KEY REFERENCES blog.owner_accounts(id) ON DELETE CASCADE,
     name text NOT NULL,
@@ -61,8 +80,10 @@ CREATE TABLE blog.author_profiles (
         CASE WHEN jsonb_typeof(about) = 'object' THEN true ELSE false END
     ),
     CONSTRAINT author_profiles_version_ck CHECK (version > 0)
-);
+)
+$ddl$;
 
+    EXECUTE $ddl$
 CREATE TABLE blog.site_settings (
     singleton_key smallint PRIMARY KEY DEFAULT 1,
     name text NOT NULL,
@@ -88,10 +109,14 @@ CREATE TABLE blog.site_settings (
         CASE WHEN jsonb_typeof(navigation) = 'array' THEN true ELSE false END
     ),
     CONSTRAINT site_settings_version_ck CHECK (version > 0)
-);
+)
+$ddl$;
 
-COMMENT ON TABLE blog.site_settings IS 'Singleton public site configuration; singleton_key must equal 1.';
+    EXECUTE $ddl$
+COMMENT ON TABLE blog.site_settings IS 'Singleton site configuration; singleton_key must equal 1.'
+$ddl$;
 
+    EXECUTE $ddl$
 CREATE TABLE blog.categories (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     slug text NOT NULL,
@@ -103,8 +128,10 @@ CREATE TABLE blog.categories (
     CONSTRAINT categories_slug_ck CHECK (slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$'),
     CONSTRAINT categories_name_ck CHECK (btrim(name) <> ''),
     CONSTRAINT categories_version_ck CHECK (version > 0)
-);
+)
+$ddl$;
 
+    EXECUTE $ddl$
 CREATE TABLE blog.tags (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     slug text NOT NULL,
@@ -116,8 +143,10 @@ CREATE TABLE blog.tags (
     CONSTRAINT tags_slug_ck CHECK (slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$'),
     CONSTRAINT tags_name_ck CHECK (btrim(name) <> ''),
     CONSTRAINT tags_version_ck CHECK (version > 0)
-);
+)
+$ddl$;
 
+    EXECUTE $ddl$
 CREATE TABLE blog.posts (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     owner_id uuid NOT NULL REFERENCES blog.owner_accounts(id) ON DELETE RESTRICT,
@@ -182,58 +211,90 @@ CREATE TABLE blog.posts (
         END
     ),
     CONSTRAINT posts_version_ck CHECK (version > 0)
-);
+)
+$ddl$;
 
+    EXECUTE $ddl$
 COMMENT ON COLUMN blog.posts.published_at IS
-    'First publication time. Retained across withdraw/re-publish to keep public chronology stable.';
+    'First publication time. Retained across withdraw/re-publish to keep public chronology stable.'
+$ddl$;
+    EXECUTE $ddl$
 COMMENT ON COLUMN blog.posts.content_updated_at IS
-    'Optional public content modification timestamp; distinct from technical row_updated_at.';
+    'Optional public content modification timestamp; distinct from technical row_updated_at.'
+$ddl$;
+    EXECUTE $ddl$
 COMMENT ON COLUMN blog.posts.body IS
-    'Ordered ContentBlock[] JSON. SQL checks array/non-empty-on-publish; application validates the full discriminated union.';
+    'Ordered ContentBlock[] JSON. SQL checks array/non-empty-on-publish; application validates the full discriminated union.'
+$ddl$;
+    EXECUTE $ddl$
 COMMENT ON COLUMN blog.posts.deleted_at IS
-    'Soft-delete marker. Application transitions a deleted post to draft before setting this value.';
+    'Soft-delete marker. Application transitions a deleted post to draft before setting this value.'
+$ddl$;
 
+    EXECUTE $ddl$
 CREATE UNIQUE INDEX posts_slug_uq
     ON blog.posts (slug)
-    WHERE slug IS NOT NULL;
+    WHERE slug IS NOT NULL
+$ddl$;
 
+    EXECUTE $ddl$
 CREATE INDEX posts_owner_active_idx
     ON blog.posts (owner_id, status, row_updated_at DESC, id DESC)
-    WHERE deleted_at IS NULL;
+    WHERE deleted_at IS NULL
+$ddl$;
 
+    EXECUTE $ddl$
 CREATE INDEX posts_owner_deleted_idx
     ON blog.posts (owner_id, deleted_at DESC, id DESC)
-    WHERE deleted_at IS NOT NULL;
+    WHERE deleted_at IS NOT NULL
+$ddl$;
 
+    EXECUTE $ddl$
 CREATE INDEX posts_public_timeline_idx
     ON blog.posts (published_at DESC, id DESC)
-    WHERE status = 'published' AND deleted_at IS NULL;
+    WHERE status = 'published' AND deleted_at IS NULL
+$ddl$;
 
+    EXECUTE $ddl$
 CREATE INDEX posts_public_category_idx
     ON blog.posts (category_id, published_at DESC, id DESC)
-    WHERE status = 'published' AND deleted_at IS NULL;
+    WHERE status = 'published' AND deleted_at IS NULL
+$ddl$;
 
+    EXECUTE $ddl$
 CREATE INDEX posts_title_trgm_idx
-    ON blog.posts USING gin (title gin_trgm_ops);
+    ON blog.posts USING gin (title gin_trgm_ops)
+$ddl$;
 
+    EXECUTE $ddl$
 CREATE INDEX posts_excerpt_trgm_idx
-    ON blog.posts USING gin ((coalesce(excerpt, '')) gin_trgm_ops);
+    ON blog.posts USING gin ((coalesce(excerpt, '')) gin_trgm_ops)
+$ddl$;
 
+    EXECUTE $ddl$
 CREATE INDEX categories_name_trgm_idx
-    ON blog.categories USING gin (name gin_trgm_ops);
+    ON blog.categories USING gin (name gin_trgm_ops)
+$ddl$;
 
+    EXECUTE $ddl$
 CREATE INDEX tags_name_trgm_idx
-    ON blog.tags USING gin (name gin_trgm_ops);
+    ON blog.tags USING gin (name gin_trgm_ops)
+$ddl$;
 
+    EXECUTE $ddl$
 CREATE TABLE blog.post_tags (
     post_id uuid NOT NULL REFERENCES blog.posts(id) ON DELETE CASCADE,
     tag_id uuid NOT NULL REFERENCES blog.tags(id) ON DELETE RESTRICT,
     created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
     PRIMARY KEY (post_id, tag_id)
-);
+)
+$ddl$;
 
-CREATE INDEX post_tags_tag_post_idx ON blog.post_tags (tag_id, post_id);
+    EXECUTE $ddl$
+CREATE INDEX post_tags_tag_post_idx ON blog.post_tags (tag_id, post_id)
+$ddl$;
 
+    EXECUTE $ddl$
 CREATE TABLE blog.auth_sessions (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     account_id uuid NOT NULL REFERENCES blog.owner_accounts(id) ON DELETE CASCADE,
@@ -247,19 +308,27 @@ CREATE TABLE blog.auth_sessions (
     CONSTRAINT auth_sessions_expiry_ck CHECK (expires_at > created_at),
     CONSTRAINT auth_sessions_last_seen_ck CHECK (last_seen_at >= created_at),
     CONSTRAINT auth_sessions_revoked_ck CHECK (revoked_at IS NULL OR revoked_at >= created_at)
-);
+)
+$ddl$;
 
+    EXECUTE $ddl$
 COMMENT ON COLUMN blog.auth_sessions.token_hash IS
-    'SHA-256 digest of the opaque session token. The plaintext token exists only in the secure Cookie.';
+    'SHA-256 digest of the opaque session token. The plaintext token exists only in the secure Cookie.'
+$ddl$;
 
+    EXECUTE $ddl$
 CREATE INDEX auth_sessions_account_active_idx
     ON blog.auth_sessions (account_id, expires_at DESC, id DESC)
-    WHERE revoked_at IS NULL;
+    WHERE revoked_at IS NULL
+$ddl$;
 
+    EXECUTE $ddl$
 CREATE INDEX auth_sessions_expiry_idx
     ON blog.auth_sessions (expires_at)
-    WHERE revoked_at IS NULL;
+    WHERE revoked_at IS NULL
+$ddl$;
 
+    EXECUTE $ddl$
 CREATE TABLE blog.auth_rate_limits (
     key_kind text NOT NULL,
     key_hash bytea NOT NULL,
@@ -268,21 +337,33 @@ CREATE TABLE blog.auth_rate_limits (
     blocked_until timestamptz,
     updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
     PRIMARY KEY (key_kind, key_hash),
-    CONSTRAINT auth_rate_limits_kind_ck CHECK (key_kind IN ('email', 'ip')),
+    CONSTRAINT auth_rate_limits_kind_ck CHECK (
+        key_kind IN ('login_email', 'register_global')
+    ),
     CONSTRAINT auth_rate_limits_key_hash_ck CHECK (octet_length(key_hash) = 32),
     CONSTRAINT auth_rate_limits_attempt_count_ck CHECK (attempt_count >= 0),
     CONSTRAINT auth_rate_limits_blocked_until_ck CHECK (
         blocked_until IS NULL OR blocked_until >= window_started_at
     )
-);
+)
+$ddl$;
 
+    EXECUTE $ddl$
 COMMENT ON COLUMN blog.auth_rate_limits.key_hash IS
-    'Server-side HMAC digest of normalized email or IP using a secret pepper; raw values are not stored.';
+    'Server-side HMAC digest of normalized email or the fixed registration scope; raw values are not stored.'
+$ddl$;
+    EXECUTE $ddl$
+COMMENT ON COLUMN blog.auth_rate_limits.key_kind IS
+    'Authentication budget kind. Login is scoped by normalized email; first-registration uses one global singleton budget.'
+$ddl$;
 
+    EXECUTE $ddl$
 CREATE INDEX auth_rate_limits_blocked_idx
     ON blog.auth_rate_limits (blocked_until)
-    WHERE blocked_until IS NOT NULL;
+    WHERE blocked_until IS NOT NULL
+$ddl$;
 
+    EXECUTE $ddl$
 CREATE TABLE blog.idempotency_keys (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     account_id uuid NOT NULL REFERENCES blog.owner_accounts(id) ON DELETE CASCADE,
@@ -308,13 +389,19 @@ CREATE TABLE blog.idempotency_keys (
         OR (response_status IS NOT NULL AND response_body IS NOT NULL)
     ),
     CONSTRAINT idempotency_keys_expiry_ck CHECK (expires_at > created_at)
-);
+)
+$ddl$;
 
+    EXECUTE $ddl$
 COMMENT ON TABLE blog.idempotency_keys IS
-    'Safe retry ledger. Store hashes rather than raw Idempotency-Key/request data.';
+    'Safe retry ledger. Store hashes rather than raw Idempotency-Key/request data.'
+$ddl$;
 
-CREATE INDEX idempotency_keys_expiry_idx ON blog.idempotency_keys (expires_at);
+    EXECUTE $ddl$
+CREATE INDEX idempotency_keys_expiry_idx ON blog.idempotency_keys (expires_at)
+$ddl$;
 
+    EXECUTE $ddl$
 CREATE TABLE blog.post_audit_events (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     actor_account_id uuid NOT NULL REFERENCES blog.owner_accounts(id) ON DELETE RESTRICT,
@@ -338,35 +425,47 @@ CREATE TABLE blog.post_audit_events (
     CONSTRAINT post_audit_events_changes_object_ck CHECK (
         CASE WHEN jsonb_typeof(changes) = 'object' THEN true ELSE false END
     )
-);
+)
+$ddl$;
 
+    EXECUTE $ddl$
 COMMENT ON TABLE blog.post_audit_events IS
-    'Append-only post write audit. Application inserts an event in the same transaction as each post mutation.';
+    'Append-only post write audit. Application inserts an event in the same transaction as each post mutation.'
+$ddl$;
 
+    EXECUTE $ddl$
 CREATE INDEX post_audit_events_post_time_idx
-    ON blog.post_audit_events (post_id, occurred_at DESC, id DESC);
+    ON blog.post_audit_events (post_id, occurred_at DESC, id DESC)
+$ddl$;
 
+    EXECUTE $ddl$
 CREATE INDEX post_audit_events_actor_time_idx
-    ON blog.post_audit_events (actor_account_id, occurred_at DESC, id DESC);
+    ON blog.post_audit_events (actor_account_id, occurred_at DESC, id DESC)
+$ddl$;
 
+    EXECUTE $ddl$
 CREATE INDEX post_audit_events_request_idx
-    ON blog.post_audit_events (request_id);
+    ON blog.post_audit_events (request_id)
+$ddl$;
 
+    EXECUTE $ddl$
 CREATE OR REPLACE FUNCTION blog.touch_versioned_row()
 RETURNS trigger
 LANGUAGE plpgsql
-AS $$
+AS $function$
 BEGIN
     NEW.updated_at := clock_timestamp();
     NEW.version := OLD.version + 1;
     RETURN NEW;
 END;
-$$;
+$function$
+$ddl$;
 
+    EXECUTE $ddl$
 CREATE OR REPLACE FUNCTION blog.touch_post_row()
 RETURNS trigger
 LANGUAGE plpgsql
-AS $$
+AS $function$
 BEGIN
     IF OLD.published_at IS NOT NULL AND NEW.slug IS DISTINCT FROM OLD.slug THEN
         RAISE EXCEPTION USING
@@ -379,32 +478,46 @@ BEGIN
     NEW.version := OLD.version + 1;
     RETURN NEW;
 END;
-$$;
+$function$
+$ddl$;
 
+    EXECUTE $ddl$
 CREATE TRIGGER owner_accounts_touch_version
 BEFORE UPDATE ON blog.owner_accounts
-FOR EACH ROW EXECUTE FUNCTION blog.touch_versioned_row();
+FOR EACH ROW EXECUTE FUNCTION blog.touch_versioned_row()
+$ddl$;
 
+    EXECUTE $ddl$
 CREATE TRIGGER author_profiles_touch_version
 BEFORE UPDATE ON blog.author_profiles
-FOR EACH ROW EXECUTE FUNCTION blog.touch_versioned_row();
+FOR EACH ROW EXECUTE FUNCTION blog.touch_versioned_row()
+$ddl$;
 
+    EXECUTE $ddl$
 CREATE TRIGGER site_settings_touch_version
 BEFORE UPDATE ON blog.site_settings
-FOR EACH ROW EXECUTE FUNCTION blog.touch_versioned_row();
+FOR EACH ROW EXECUTE FUNCTION blog.touch_versioned_row()
+$ddl$;
 
+    EXECUTE $ddl$
 CREATE TRIGGER categories_touch_version
 BEFORE UPDATE ON blog.categories
-FOR EACH ROW EXECUTE FUNCTION blog.touch_versioned_row();
+FOR EACH ROW EXECUTE FUNCTION blog.touch_versioned_row()
+$ddl$;
 
+    EXECUTE $ddl$
 CREATE TRIGGER tags_touch_version
 BEFORE UPDATE ON blog.tags
-FOR EACH ROW EXECUTE FUNCTION blog.touch_versioned_row();
+FOR EACH ROW EXECUTE FUNCTION blog.touch_versioned_row()
+$ddl$;
 
+    EXECUTE $ddl$
 CREATE TRIGGER posts_touch_version
 BEFORE UPDATE ON blog.posts
-FOR EACH ROW EXECUTE FUNCTION blog.touch_post_row();
+FOR EACH ROW EXECUTE FUNCTION blog.touch_post_row()
+$ddl$;
 
+    EXECUTE $ddl$
 CREATE VIEW blog.public_posts AS
 SELECT
     id,
@@ -425,18 +538,31 @@ SELECT
     version
 FROM blog.posts
 WHERE status = 'published'
-  AND deleted_at IS NULL;
+  AND deleted_at IS NULL
+$ddl$;
 
+    EXECUTE $ddl$
 COMMENT ON VIEW blog.public_posts IS
-    'Canonical public visibility filter. Public repository reads should start from this view.';
+    'Canonical published-state filter. Authentication is enforced by the application before querying this view.'
+$ddl$;
 
-COMMIT;
+END
+$baseline$;
 
 -- Runtime grant template (execute separately after creating a least-privilege role):
 -- GRANT USAGE ON SCHEMA blog TO blog_runtime;
 -- GRANT SELECT ON blog.owner_accounts, blog.site_settings, blog.categories, blog.tags TO blog_runtime;
+-- GRANT INSERT (email, password_hash) ON blog.owner_accounts TO blog_runtime;
 -- GRANT UPDATE (password_hash, password_changed_at) ON blog.owner_accounts TO blog_runtime;
 -- GRANT SELECT, UPDATE ON blog.author_profiles TO blog_runtime;
+-- GRANT INSERT (
+--     account_id, name, role, bio, avatar_src, avatar_alt,
+--     avatar_width, avatar_height, links, about
+-- ) ON blog.author_profiles TO blog_runtime;
+-- GRANT INSERT (
+--     singleton_key, name, description, site_url, logo_src, logo_alt,
+--     logo_width, logo_height, announcement, navigation
+-- ) ON blog.site_settings TO blog_runtime;
 -- GRANT SELECT, INSERT, UPDATE ON blog.posts TO blog_runtime;
 -- GRANT SELECT, INSERT, DELETE ON blog.post_tags TO blog_runtime;
 -- GRANT SELECT, INSERT, UPDATE ON blog.auth_sessions TO blog_runtime;

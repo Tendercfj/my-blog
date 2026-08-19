@@ -23,8 +23,22 @@ const rateLimitRowSchema = z.object({
   blockedUntil: z.coerce.date().nullable(),
 });
 
+const ownerExistsRowSchema = z.object({
+  exists: z.boolean(),
+});
+
 export type OwnerAccount = z.infer<typeof ownerRowSchema>;
 export type OwnerSession = z.infer<typeof sessionRowSchema>;
+export type AuthRateLimitKind = "login_email" | "register_global";
+
+export type RegisterOwnerWithSessionInput = {
+  email: string;
+  passwordHash: string;
+  displayName: string;
+  siteUrl: string;
+  tokenHashHex: string;
+  expiresAt: Date;
+};
 
 function firstRow<T>(rows: unknown[], schema: z.ZodType<T>): T | null {
   const row = rows[0];
@@ -46,6 +60,112 @@ export async function findOwnerByEmail(email: string): Promise<OwnerAccount | nu
     [email],
   );
   return firstRow(rows, ownerRowSchema);
+}
+
+export async function ownerAccountExists(): Promise<boolean> {
+  const rows = await queryRows(
+    `
+      SELECT EXISTS (
+        SELECT 1
+        FROM blog.owner_accounts
+        WHERE singleton_key = 1
+      ) AS "exists"
+    `,
+  );
+  return ownerExistsRowSchema.parse(rows[0]).exists;
+}
+
+export async function registerOwnerWithSession(
+  input: RegisterOwnerWithSessionInput,
+): Promise<OwnerSession | null> {
+  const rows = await queryRows(
+    `
+      WITH inserted_owner AS (
+        INSERT INTO blog.owner_accounts (email, password_hash)
+        VALUES ($1, $2)
+        ON CONFLICT (singleton_key) DO NOTHING
+        RETURNING id, email
+      ),
+      inserted_profile AS (
+        INSERT INTO blog.author_profiles (
+          account_id,
+          name,
+          role,
+          bio,
+          avatar_src,
+          avatar_alt,
+          avatar_width,
+          avatar_height,
+          links,
+          about
+        )
+        SELECT
+          id,
+          $3,
+          '独立博客站长',
+          '',
+          '/images/brand/avatar.svg',
+          '站长头像',
+          240,
+          240,
+          '[]'::jsonb,
+          '{}'::jsonb
+        FROM inserted_owner
+        RETURNING account_id
+      ),
+      inserted_site AS (
+        INSERT INTO blog.site_settings (
+          singleton_key,
+          name,
+          description,
+          site_url,
+          logo_src,
+          logo_alt,
+          logo_width,
+          logo_height,
+          announcement,
+          navigation
+        )
+        SELECT
+          1,
+          '棱镜手记',
+          '记录设计、代码与日常观察的独立博客。',
+          $4,
+          '/images/brand/logo.svg',
+          '棱镜手记标志',
+          96,
+          96,
+          '',
+          '[]'::jsonb
+        FROM inserted_owner
+        ON CONFLICT (singleton_key) DO NOTHING
+        RETURNING singleton_key
+      ),
+      inserted_session AS (
+        INSERT INTO blog.auth_sessions (account_id, token_hash, expires_at)
+        SELECT id, decode($5, 'hex'), $6
+        FROM inserted_owner
+        RETURNING id, account_id, created_at, expires_at
+      )
+      SELECT
+        session.id::text AS "id",
+        session.account_id::text AS "accountId",
+        owner.email,
+        session.created_at AS "createdAt",
+        session.expires_at AS "expiresAt"
+      FROM inserted_session AS session
+      INNER JOIN inserted_owner AS owner ON owner.id = session.account_id
+    `,
+    [
+      input.email,
+      input.passwordHash,
+      input.displayName,
+      input.siteUrl,
+      input.tokenHashHex,
+      input.expiresAt.toISOString(),
+    ],
+  );
+  return firstRow(rows, sessionRowSchema);
 }
 
 export async function findSessionByTokenHash(
@@ -105,20 +225,26 @@ export async function revokeSession(sessionId: string): Promise<void> {
   );
 }
 
-export async function getEmailRateLimit(keyHashHex: string): Promise<Date | null> {
+export async function getAuthRateLimit(
+  kind: AuthRateLimitKind,
+  keyHashHex: string,
+): Promise<Date | null> {
   const rows = await queryRows(
     `
       SELECT blocked_until AS "blockedUntil"
       FROM blog.auth_rate_limits
-      WHERE key_kind = 'email' AND key_hash = decode($1, 'hex')
+      WHERE key_kind = $1 AND key_hash = decode($2, 'hex')
       LIMIT 1
     `,
-    [keyHashHex],
+    [kind, keyHashHex],
   );
   return firstRow(rows, rateLimitRowSchema)?.blockedUntil ?? null;
 }
 
-export async function recordFailedLogin(keyHashHex: string): Promise<Date | null> {
+export async function recordAuthAttempt(
+  kind: AuthRateLimitKind,
+  keyHashHex: string,
+): Promise<Date | null> {
   const rows = await queryRows(
     `
       INSERT INTO blog.auth_rate_limits (
@@ -129,7 +255,7 @@ export async function recordFailedLogin(keyHashHex: string): Promise<Date | null
         blocked_until,
         updated_at
       )
-      VALUES ('email', decode($1, 'hex'), clock_timestamp(), 1, NULL, clock_timestamp())
+      VALUES ($1, decode($2, 'hex'), clock_timestamp(), 1, NULL, clock_timestamp())
       ON CONFLICT (key_kind, key_hash) DO UPDATE
       SET
         window_started_at = CASE
@@ -152,12 +278,15 @@ export async function recordFailedLogin(keyHashHex: string): Promise<Date | null
         updated_at = clock_timestamp()
       RETURNING blocked_until AS "blockedUntil"
     `,
-    [keyHashHex],
+    [kind, keyHashHex],
   );
   return rateLimitRowSchema.parse(rows[0]).blockedUntil;
 }
 
-export async function resetLoginRateLimit(keyHashHex: string): Promise<void> {
+export async function resetAuthRateLimit(
+  kind: AuthRateLimitKind,
+  keyHashHex: string,
+): Promise<void> {
   await queryRows(
     `
       UPDATE blog.auth_rate_limits
@@ -166,8 +295,8 @@ export async function resetLoginRateLimit(keyHashHex: string): Promise<void> {
         attempt_count = 0,
         blocked_until = NULL,
         updated_at = clock_timestamp()
-      WHERE key_kind = 'email' AND key_hash = decode($1, 'hex')
+      WHERE key_kind = $1 AND key_hash = decode($2, 'hex')
     `,
-    [keyHashHex],
+    [kind, keyHashHex],
   );
 }

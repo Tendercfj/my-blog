@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { LogIn } from "lucide-react";
+import { CircleUserRound } from "lucide-react";
 
 import { SearchTrigger } from "@/components/search/search-provider";
 import { MobileNav } from "@/components/site/mobile-nav";
@@ -20,11 +20,11 @@ export function SiteHeader({ site, stats }: { site: SiteConfig; stats: SiteStats
           <SearchTrigger className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-foreground/75 transition-colors hover:bg-muted hover:text-card-foreground" />
           <NavLinks items={site.navigation} />
           <Link
-            href={routes.login}
+            href={routes.account}
             className="ml-1 inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/80"
           >
-            <LogIn className="size-4" aria-hidden="true" />
-            登录
+            <CircleUserRound className="size-4" aria-hidden="true" />
+            账号
           </Link>
         </div>
         <div className="flex items-center gap-1 min-[769px]:hidden">

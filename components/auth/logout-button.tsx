@@ -19,7 +19,7 @@ export function LogoutButton() {
         credentials: "same-origin",
       });
     } finally {
-      router.replace(routes.home);
+      router.replace(routes.login);
       router.refresh();
     }
   }

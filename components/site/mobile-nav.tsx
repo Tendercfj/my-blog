@@ -1,7 +1,7 @@
 "use client";
 
 import { Drawer } from "@base-ui/react/drawer";
-import { LogIn, Menu, X } from "lucide-react";
+import { CircleUserRound, Menu, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -64,12 +64,12 @@ export function MobileNav({ site, stats }: { site: SiteConfig; stats: SiteStats 
                   </Link>
                 ))}
                 <Link
-                  href={routes.login}
+                  href={routes.account}
                   onClick={() => setOpen(false)}
                   className="mt-2 flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 font-semibold text-primary-foreground transition-colors hover:bg-primary/80"
                 >
-                  <LogIn className="size-4" aria-hidden="true" />
-                  站长登录
+                  <CircleUserRound className="size-4" aria-hidden="true" />
+                  站长账号
                 </Link>
               </nav>
               <p className="mt-6 rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">

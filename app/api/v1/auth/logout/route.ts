@@ -2,13 +2,13 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { ApiProblem } from "@/lib/api/problem";
 import { createRequestId, errorResponse } from "@/lib/api/response";
-import { isSameOrigin } from "@/lib/auth/origin";
-import { revokeSession } from "@/lib/auth/repository";
 import {
   expiredSessionCookie,
-  findSessionByToken,
   sessionCookieName,
-} from "@/lib/auth/session";
+} from "@/lib/auth/cookie";
+import { isSameOrigin } from "@/lib/auth/origin";
+import { revokeSession } from "@/lib/auth/repository";
+import { findSessionByToken } from "@/lib/auth/session";
 
 export const runtime = "nodejs";
 
