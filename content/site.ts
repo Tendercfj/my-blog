@@ -1,8 +1,16 @@
 import type { SiteConfig } from "@/lib/content/types";
 
+function normalizeOrigin(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) return undefined;
+  return trimmed.includes("://") ? trimmed : `https://${trimmed}`;
+}
+
 const siteUrl =
-  process.env.SITE_URL?.trim() ||
-  process.env.APP_ORIGIN?.trim() ||
+  normalizeOrigin(process.env.SITE_URL) ||
+  normalizeOrigin(process.env.APP_ORIGIN) ||
+  normalizeOrigin(process.env.VERCEL_PROJECT_PRODUCTION_URL) ||
+  normalizeOrigin(process.env.VERCEL_URL) ||
   "http://localhost:3000";
 
 export const siteConfig = {

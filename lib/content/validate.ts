@@ -93,7 +93,7 @@ export function validateContent(site: SiteConfig, posts: readonly PostRecord[]):
   assert(site.name.trim() && site.description.trim(), "site name and description are required");
   const siteUrl = new URL(site.siteUrl);
   if (process.env.VERCEL_ENV === "production") {
-    assert(siteUrl.protocol === "https:", "production SITE_URL must use https");
+    assert(siteUrl.protocol === "https:", "production site URL must use https");
   }
   validateImage(site.logo, "site logo");
   validateImage(site.author.avatar, "author avatar");
