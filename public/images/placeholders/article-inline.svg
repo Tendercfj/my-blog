@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" role="img" aria-labelledby="title">
+  <title id="title">抽象网格插图</title>
+  <defs><linearGradient id="b" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#edf1ff"/><stop offset="1" stop-color="#f6eefe"/></linearGradient><pattern id="p" width="56" height="56" patternUnits="userSpaceOnUse"><path d="M56 0H0v56" fill="none" stroke="#425aef" stroke-opacity=".12"/></pattern></defs>
+  <rect width="1280" height="720" fill="url(#b)"/><rect width="1280" height="720" fill="url(#p)"/>
+  <circle cx="480" cy="360" r="180" fill="#425aef" opacity=".13"/><circle cx="740" cy="320" r="130" fill="#a06cff" opacity=".18"/>
+  <path d="m485 460 160-260 160 260Z" fill="none" stroke="#425aef" stroke-width="18" stroke-linejoin="round"/>
+</svg>

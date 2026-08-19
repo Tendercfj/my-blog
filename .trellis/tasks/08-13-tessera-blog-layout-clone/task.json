@@ -1,0 +1,28 @@
+{
+  "id": "tessera-blog-layout-clone",
+  "name": "tessera-blog-layout-clone",
+  "title": "复刻 Tessera Blog 布局样式",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "tender",
+  "assignee": "tender",
+  "createdAt": "2026-08-13",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "08-18-neon-api-database-docs"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}
