@@ -1,0 +1,4 @@
+{"file":".trellis/spec/frontend/index.md","reason":"Check project style and client boundaries."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Check server snapshot to browser mutation round trips."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Check duplicated API/form parsing."}
+{"file":".trellis/tasks/08-19-blog-api-ui-completion/research/current-state.md","reason":"Check all promised account gaps are covered."}

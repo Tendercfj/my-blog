@@ -1,0 +1,4 @@
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Check complete mutation and error data flow."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Check duplicate transition/validation logic."}
+{"file":".trellis/tasks/08-19-blog-api-ui-completion/research/current-state.md","reason":"Check contracts against current auth/API helpers."}
+{"file":".trellis/tasks/08-18-neon-api-database-docs/research/neon-contracts.md","reason":"Check parameterization and short transactions."}

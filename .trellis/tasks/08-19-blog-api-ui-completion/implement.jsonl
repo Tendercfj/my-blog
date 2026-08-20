@@ -1,0 +1,5 @@
+{"file":".trellis/spec/frontend/index.md","reason":"Frontend spec index and current bootstrap status; do not invent missing conventions."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"The task spans database, repository, service, HTTP and UI contracts."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"DTO decoders, validation, API errors and state transitions must have one owner."}
+{"file":".trellis/tasks/08-19-blog-api-ui-completion/research/current-state.md","reason":"Current repository evidence, installed Next.js guidance and confirmed product decisions."}
+{"file":".trellis/tasks/08-18-neon-api-database-docs/research/neon-contracts.md","reason":"Existing Neon driver, pooler, transaction and security research baseline."}

@@ -1,0 +1,4 @@
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Repository and database boundary contract."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Reuse existing derive/search/validation logic."}
+{"file":".trellis/tasks/08-19-blog-api-ui-completion/research/current-state.md","reason":"Current repository and source facts."}
+{"file":".trellis/tasks/08-18-neon-api-database-docs/research/neon-contracts.md","reason":"Neon pooled/direct and transaction constraints."}

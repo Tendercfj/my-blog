@@ -1,0 +1,33 @@
+{
+  "id": "blog-api-ui-completion",
+  "name": "blog-api-ui-completion",
+  "title": "完整博客接口与管理 UI",
+  "description": "",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "tender",
+  "assignee": "tender",
+  "createdAt": "2026-08-19",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "08-19-database-content-foundation",
+    "08-19-content-read-api-pages",
+    "08-19-owner-write-api",
+    "08-19-account-management-ui",
+    "08-19-structured-post-editor",
+    "08-19-full-stack-integration-check"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

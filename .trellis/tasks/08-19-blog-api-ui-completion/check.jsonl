@@ -1,0 +1,5 @@
+{"file":".trellis/spec/frontend/index.md","reason":"Check implementation against the actual project spec state."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Verify complete database-to-UI round trips and error boundaries."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Detect duplicated decoders, state machines, constants and payload parsing."}
+{"file":".trellis/tasks/08-19-blog-api-ui-completion/research/current-state.md","reason":"Check promised current-state gaps and approved UX/data-source decisions."}
+{"file":".trellis/tasks/08-18-neon-api-database-docs/research/neon-contracts.md","reason":"Check Neon pooled/direct and transaction-mode constraints."}

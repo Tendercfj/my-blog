@@ -1,0 +1,4 @@
+{"file":".trellis/spec/frontend/index.md","reason":"Check UI style and client boundary."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Check every block survives save/reload/preview."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Check duplicated state and payload parsing."}
+{"file":".trellis/tasks/08-19-blog-api-ui-completion/research/current-state.md","reason":"Check all approved editor UX choices."}

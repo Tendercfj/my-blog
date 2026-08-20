@@ -1,0 +1,4 @@
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Check database-to-domain round trips."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Check duplicate decoders and derived facts."}
+{"file":".trellis/tasks/08-19-blog-api-ui-completion/research/current-state.md","reason":"Check current behavior preservation."}
+{"file":".trellis/tasks/08-18-neon-api-database-docs/research/neon-contracts.md","reason":"Check Neon safety constraints."}

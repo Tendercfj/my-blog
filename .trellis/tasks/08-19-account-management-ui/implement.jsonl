@@ -1,0 +1,4 @@
+{"file":".trellis/spec/frontend/index.md","reason":"Actual frontend spec state and conventions."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Form/API/version/session boundary."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Shared browser API decoder and form patterns."}
+{"file":".trellis/tasks/08-19-blog-api-ui-completion/research/current-state.md","reason":"Existing account/auth/UI patterns and Next.js guidance."}

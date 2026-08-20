@@ -1,0 +1,4 @@
+{"file":".trellis/spec/frontend/index.md","reason":"Check current frontend conventions."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Check API-to-page round trips and errors."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Check duplicated query/response logic."}
+{"file":".trellis/tasks/08-19-blog-api-ui-completion/research/current-state.md","reason":"Check all existing pages and gaps were covered."}

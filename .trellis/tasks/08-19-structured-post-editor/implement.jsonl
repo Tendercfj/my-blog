@@ -1,0 +1,4 @@
+{"file":".trellis/spec/frontend/index.md","reason":"Actual component and UI spec state."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Editor state/API/DB round-trip and conflict behavior."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Reuse renderer, schemas, API decoder and reducer."}
+{"file":".trellis/tasks/08-19-blog-api-ui-completion/research/current-state.md","reason":"Approved editor decisions and existing renderer/media facts."}

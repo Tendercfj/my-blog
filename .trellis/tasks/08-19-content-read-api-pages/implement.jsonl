@@ -1,0 +1,4 @@
+{"file":".trellis/spec/frontend/index.md","reason":"Current frontend spec state."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"API/service/page DTO consistency."}
+{"file":".trellis/tasks/08-19-blog-api-ui-completion/research/current-state.md","reason":"Existing page and API inventory plus Next.js guidance."}
+{"file":".trellis/tasks/08-18-neon-api-database-docs/research/neon-contracts.md","reason":"Authenticated no-store Neon read constraints."}

@@ -1,0 +1,5 @@
+{"file":".trellis/spec/frontend/index.md","reason":"Final project-style check."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Final data-flow and boundary check."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Final contract-reuse check."}
+{"file":".trellis/tasks/08-19-blog-api-ui-completion/research/current-state.md","reason":"Final approved-scope audit."}
+{"file":".trellis/tasks/08-18-neon-api-database-docs/research/neon-contracts.md","reason":"Final Neon constraint audit."}
