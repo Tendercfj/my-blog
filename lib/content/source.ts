@@ -11,6 +11,10 @@ export function resolveBlogContentSource(
 ): BlogContentSource {
   const source = environment.BLOG_CONTENT_SOURCE?.trim();
 
+  if (!source && environment.NODE_ENV === "production") {
+    return "neon";
+  }
+
   if (source !== "local" && source !== "neon") {
     throw new Error(
       "BLOG_CONTENT_SOURCE must be explicitly set to either local or neon",

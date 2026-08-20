@@ -42,6 +42,7 @@
 
    - `DATABASE_URL`：Next.js runtime 使用的 `-pooler` 连接串；
    - `DATABASE_URL_UNPOOLED`：只给 migration/bootstrap/reset CLI 使用的 direct 连接串；
+   - `BLOG_CONTENT_SOURCE`：本地开发/测试必须显式设置为 `local` 或 `neon`；production 缺省固定使用 `neon`，且拒绝 `local`；
    - `APP_ORIGIN`：实际站点 Origin；
    - `AUTH_RATE_LIMIT_PEPPER`：独立生成、至少 32 字符的随机 Secret；
    - `CONTENT_CURSOR_SECRET`：另行生成、至少 32 字符的分页游标 HMAC Secret。

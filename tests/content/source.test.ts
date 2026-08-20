@@ -25,10 +25,16 @@ function repository(): ContentRepository {
 }
 
 describe("BLOG_CONTENT_SOURCE", () => {
-  it("requires an explicit supported value", () => {
+  it("requires an explicit supported value outside production", () => {
     expect(() => resolveBlogContentSource({ NODE_ENV: "test" })).toThrow(
       "BLOG_CONTENT_SOURCE must be explicitly set",
     );
+    expect(() =>
+      resolveBlogContentSource({
+        NODE_ENV: "development",
+        BLOG_CONTENT_SOURCE: "   ",
+      }),
+    ).toThrow("BLOG_CONTENT_SOURCE must be explicitly set");
     expect(() =>
       resolveBlogContentSource({
         NODE_ENV: "test",
@@ -37,7 +43,14 @@ describe("BLOG_CONTENT_SOURCE", () => {
     ).toThrow("BLOG_CONTENT_SOURCE must be explicitly set");
   });
 
-  it("forbids local in production", () => {
+  it("defaults production to Neon while rejecting explicit local or invalid values", () => {
+    expect(resolveBlogContentSource({ NODE_ENV: "production" })).toBe("neon");
+    expect(
+      resolveBlogContentSource({
+        NODE_ENV: "production",
+        BLOG_CONTENT_SOURCE: "   ",
+      }),
+    ).toBe("neon");
     expect(() =>
       resolveBlogContentSource({
         NODE_ENV: "production",
@@ -50,6 +63,21 @@ describe("BLOG_CONTENT_SOURCE", () => {
         BLOG_CONTENT_SOURCE: "neon",
       }),
     ).toBe("neon");
+    expect(() =>
+      resolveBlogContentSource({
+        NODE_ENV: "production",
+        BLOG_CONTENT_SOURCE: "fallback",
+      }),
+    ).toThrow("BLOG_CONTENT_SOURCE must be explicitly set");
+  });
+
+  it("selects the Neon repository for an unconfigured production build", () => {
+    const local = repository();
+    const neon = repository();
+
+    expect(
+      selectContentRepository({ NODE_ENV: "production" }, { local, neon }),
+    ).toBe(neon);
   });
 
   it("selects once without catching Neon failures or falling back", async () => {

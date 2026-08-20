@@ -2,7 +2,7 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## 内容数据源
 
-服务端通过 `BLOG_CONTENT_SOURCE=local|neon` 显式选择内容 repository。本地开发和测试可以使用 `local`；production 只接受 `neon`。选择 `neon` 后，缺少 `DATABASE_URL`、查询失败或数据库行无效都会明确失败，不会自动回退到本地旧内容。
+服务端通过 `BLOG_CONTENT_SOURCE=local|neon` 选择内容 repository。本地开发和测试必须显式设置；production 未设置时固定使用 `neon`，且显式 `local` 会被拒绝。选择 `neon` 后，缺少 `DATABASE_URL`、查询失败或数据库行无效都会明确失败，不会自动回退到本地旧内容。
 
 ```bash
 rtk pnpm test
