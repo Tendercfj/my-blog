@@ -6,6 +6,7 @@ import { LogoutButton } from "@/components/auth/logout-button";
 import { FullWidthLayout } from "@/components/site/page-layout";
 import { requireCurrentSession } from "@/lib/auth/session";
 import { listOwnerPosts } from "@/lib/content/owner-repository";
+import { getSiteConfig } from "@/lib/content/service";
 import { routes } from "@/lib/routes";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +18,10 @@ export const metadata: Metadata = {
 
 export default async function AccountPage() {
   const session = await requireCurrentSession();
-  const posts = await listOwnerPosts(session.accountId, { status: "published" });
+  const [site, posts] = await Promise.all([
+    getSiteConfig(),
+    listOwnerPosts(session.accountId, { status: "published" }),
+  ]);
 
   return (
     <FullWidthLayout>
@@ -31,6 +35,13 @@ export default async function AccountPage() {
               站长账号
             </h1>
             <p className="mt-2 text-muted-foreground">当前登录邮箱：{session.email}</p>
+            <div className="mt-4 rounded-xl border border-border/70 bg-background/45 px-4 py-3">
+              <p className="text-sm font-semibold text-card-foreground">{site.author.name}</p>
+              <p className="mt-1 text-xs text-primary">{site.author.role || "站长"}</p>
+              {site.author.bio ? (
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">{site.author.bio}</p>
+              ) : null}
+            </div>
           </div>
           <div className="grid gap-5 px-5 py-7 sm:px-8">
             <section className="rounded-xl border border-border bg-background/65 p-5" aria-labelledby="owner-posts-title">

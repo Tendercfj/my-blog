@@ -54,6 +54,25 @@ function updateInline(children: readonly InlineContent[], index: number, value: 
   return children.map((child, i) => i === index ? { ...child, value } : child);
 }
 
+function normalizeBodyForUpdate(body: readonly ContentBlock[]): readonly ContentBlock[] {
+  return body.map((block) => {
+    if (block.type === "quote") {
+      return block.cite ? block : { type: "quote", text: block.text };
+    }
+    if (block.type === "image") {
+      return block.caption ? block : { type: "image", image: block.image };
+    }
+    return block;
+  });
+}
+
+function changeInlineType(child: InlineContent, type: InlineContent["type"]): InlineContent {
+  if (type === "link") {
+    return { type, value: child.value, href: child.type === "link" ? child.href : "/" };
+  }
+  return { type, value: child.value };
+}
+
 function Preview({ block }: { block: ContentBlock }) {
   switch (block.type) {
     case "heading": return block.level === 2 ? <h3 className="mt-4 text-xl font-bold">{block.text}</h3> : <h4 className="mt-3 text-lg font-bold">{block.text}</h4>;
@@ -69,8 +88,8 @@ function BlockEditor({ block, index, dispatch }: { block: ContentBlock; index: n
   const field = (label: string, value: string, onChange: (value: string) => void) => <label className="grid gap-1 text-xs font-semibold text-muted-foreground"><span>{label}</span><input value={value} onChange={(event) => onChange(event.target.value)} className="rounded-md border border-border bg-background px-2 py-1.5 text-sm font-normal text-card-foreground" /></label>;
   let editor: React.ReactNode;
   switch (block.type) {
-    case "heading": editor = <div className="grid gap-2 sm:grid-cols-[90px_1fr]"><label className="grid gap-1 text-xs font-semibold text-muted-foreground"><span>层级</span><select value={block.level} onChange={(event) => dispatch({ type: "block", index, block: { ...block, level: Number(event.target.value) as 2 | 3 } })} className="rounded-md border border-border bg-background px-2 py-1.5 text-sm"><option value="2">H2</option><option value="3">H3</option></select></label>{field("标题", block.text, (text) => dispatch({ type: "block", index, block: { ...block, text, id: text.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]+/g, "-").replace(/^-|-$/g, "") || "section" } }))}</div>; break;
-    case "paragraph": editor = <div className="grid gap-2">{block.children.map((child, childIndex) => <div key={childIndex} className="grid gap-1 sm:grid-cols-[90px_1fr]"><select value={child.type} onChange={(event) => dispatch({ type: "block", index, block: { ...block, children: block.children.map((item, i) => i === childIndex ? { type: event.target.value as "text" | "code", value: item.value } : item) } })} className="rounded-md border border-border bg-background px-2 py-1.5 text-xs"><option value="text">文本</option><option value="code">行内代码</option></select><input value={child.value} onChange={(event) => dispatch({ type: "block", index, block: { ...block, children: updateInline(block.children, childIndex, event.target.value) } })} className="rounded-md border border-border bg-background px-2 py-1.5 text-sm" /></div>)}<button type="button" onClick={() => dispatch({ type: "block", index, block: { ...block, children: [...block.children, { type: "text", value: "新文本" }] } })} className="text-left text-xs font-semibold text-primary">+ 添加行内文本</button></div>; break;
+    case "heading": editor = <div className="grid gap-2 sm:grid-cols-[90px_1fr]"><label className="grid gap-1 text-xs font-semibold text-muted-foreground"><span>层级</span><select value={block.level} onChange={(event) => dispatch({ type: "block", index, block: { ...block, level: Number(event.target.value) as 2 | 3 } })} className="rounded-md border border-border bg-background px-2 py-1.5 text-sm"><option value="2">H2</option><option value="3">H3</option></select></label>{field("标题", block.text, (text) => dispatch({ type: "block", index, block: { ...block, text } }))}{field("锚点 id", block.id, (id) => dispatch({ type: "block", index, block: { ...block, id: id.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "section" } }))}</div>; break;
+    case "paragraph": editor = <div className="grid gap-2">{block.children.map((child, childIndex) => <div key={childIndex} className="grid gap-1 sm:grid-cols-[90px_1fr]"><select value={child.type} onChange={(event) => dispatch({ type: "block", index, block: { ...block, children: block.children.map((item, i) => i === childIndex ? changeInlineType(item, event.target.value as InlineContent["type"]) : item) } })} className="rounded-md border border-border bg-background px-2 py-1.5 text-xs"><option value="text">文本</option><option value="link">链接</option><option value="code">行内代码</option></select><input value={child.value} onChange={(event) => dispatch({ type: "block", index, block: { ...block, children: updateInline(block.children, childIndex, event.target.value) } })} className="rounded-md border border-border bg-background px-2 py-1.5 text-sm" />{child.type === "link" ? <input aria-label="链接地址" value={child.href} onChange={(event) => dispatch({ type: "block", index, block: { ...block, children: block.children.map((item, i) => i === childIndex && item.type === "link" ? { ...item, href: event.target.value } : item) } })} className="rounded-md border border-border bg-background px-2 py-1.5 text-sm" /> : null}</div>)}<button type="button" onClick={() => dispatch({ type: "block", index, block: { ...block, children: [...block.children, { type: "text", value: "新文本" }] } })} className="text-left text-xs font-semibold text-primary">+ 添加行内文本</button></div>; break;
     case "list": editor = <div className="grid gap-2"><label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={block.ordered} onChange={(event) => dispatch({ type: "block", index, block: { ...block, ordered: event.target.checked } })} />有序列表</label>{block.items.map((item, itemIndex) => <input key={itemIndex} value={item} onChange={(event) => dispatch({ type: "block", index, block: { ...block, items: block.items.map((value, i) => i === itemIndex ? event.target.value : value) } })} className="rounded-md border border-border bg-background px-2 py-1.5 text-sm" />)}<button type="button" onClick={() => dispatch({ type: "block", index, block: { ...block, items: [...block.items, "新条目"] } })} className="text-left text-xs font-semibold text-primary">+ 添加条目</button></div>; break;
     case "quote": editor = <div className="grid gap-2">{field("引用", block.text, (text) => dispatch({ type: "block", index, block: { ...block, text } }))}{field("出处（可选）", block.cite ?? "", (cite) => dispatch({ type: "block", index, block: { ...block, cite: cite || undefined } }))}</div>; break;
     case "image": editor = <div className="grid gap-2 sm:grid-cols-2">{field("图片 URL", block.image.src, (src) => dispatch({ type: "block", index, block: { ...block, image: { ...block.image, src: src as typeof block.image.src } } }))}{field("替代文本", block.image.alt, (alt) => dispatch({ type: "block", index, block: { ...block, image: { ...block.image, alt } } }))}{field("宽度", String(block.image.width), (value) => dispatch({ type: "block", index, block: { ...block, image: { ...block.image, width: Number(value) || 1 } } }))}{field("高度", String(block.image.height), (value) => dispatch({ type: "block", index, block: { ...block, image: { ...block.image, height: Number(value) || 1 } } }))}{field("说明（可选）", block.caption ?? "", (caption) => dispatch({ type: "block", index, block: { ...block, caption: caption || undefined } }))}</div>; break;
@@ -87,26 +106,27 @@ export function PostEditor({ post }: { post: OwnerPost }) {
   async function save() {
     dispatch({ type: "saving", value: true });
     try {
-      const payload = {
+      const requestBody = {
         ...state.draft,
         category: state.draft.category?.slug ?? null,
         tags: state.draft.tags.map((tag) => tag.slug),
+        body: normalizeBodyForUpdate(state.draft.body),
       };
-      const response = await fetch(`/api/v1/me/posts/${post.id}`, { method: "PATCH", headers: { "Content-Type": "application/json", Origin: window.location.origin }, body: JSON.stringify(state.draft) });
+      const response = await fetch(`/api/v1/me/posts/${post.id}`, { method: "PATCH", headers: { "Content-Type": "application/json", Origin: window.location.origin }, body: JSON.stringify(requestBody) });
       if (response.ok) {
-        const payload = await response.json() as { data: OwnerPost };
-        dispatch({ type: "saved", draft: initialDraft(payload.data) });
+        const successPayload = await response.json() as { data: OwnerPost };
+        dispatch({ type: "saved", draft: initialDraft(successPayload.data) });
         return;
       }
-      const payload = await response.json().catch(() => null) as { error?: { code?: string; message?: string } } | null;
-      dispatch({ type: "error", message: payload?.error?.message ?? "保存失败", conflict: payload?.error?.code === "VERSION_CONFLICT" });
+      const errorPayload = await response.json().catch(() => null) as { error?: { code?: string; message?: string } } | null;
+      dispatch({ type: "error", message: errorPayload?.error?.message ?? "保存失败", conflict: errorPayload?.error?.code === "VERSION_CONFLICT" });
     } catch {
       dispatch({ type: "error", message: "网络暂时不可用，请稍后重试" });
     }
   }
   function addBlock() {
     const blocks: Record<ContentBlock["type"], ContentBlock> = {
-      heading: { type: "heading", level: 2, id: "new-section", text: "新标题" }, paragraph: { type: "paragraph", children: [{ type: "text", value: "新段落" }] }, list: { type: "list", ordered: false, items: ["新条目"] }, quote: { type: "quote", text: "新的引用" }, image: { type: "image", image: { src: "/images/placeholders/article-inline.svg", alt: "图片", width: 1200, height: 675 } }, code: { type: "code", language: "text", code: "" },
+      heading: { type: "heading", level: 2, id: "new-section", text: "新标题" }, paragraph: { type: "paragraph", children: [{ type: "text", value: "新段落" }] }, list: { type: "list", ordered: false, items: ["新条目"] }, quote: { type: "quote", text: "新的引用" }, image: { type: "image", image: { src: "/images/placeholders/article-inline.svg", alt: "图片", width: 1200, height: 675 } }, code: { type: "code", language: "text", code: "新代码" },
     };
     const block = blocks[newType];
     dispatch({ type: "add", block: block.type === "heading" ? { ...block, id: `new-section-${state.draft.body.length + 1}` } : block });

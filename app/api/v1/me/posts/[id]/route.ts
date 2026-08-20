@@ -8,6 +8,10 @@ import { isSameOrigin } from "@/lib/auth/origin";
 import { ownerPostIdSchema, ownerPostPatchSchema } from "@/lib/content/api-contract";
 import { toOwnerPostDto } from "@/lib/content/dto";
 import { getOwnerPostById, updateOwnerPost } from "@/lib/content/owner-repository";
+import {
+  contentMethodNotAllowedWithAllow,
+  contentReadOptions,
+} from "@/lib/content/http";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -49,3 +53,12 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     return errorResponse(error, requestId);
   }
 }
+
+export function OPTIONS(request: NextRequest) {
+  return contentReadOptions(request, "GET, HEAD, PATCH, OPTIONS");
+}
+
+export const POST = (request: NextRequest) =>
+  contentMethodNotAllowedWithAllow(request, "GET, HEAD, PATCH, OPTIONS");
+export const PUT = POST;
+export const DELETE = POST;

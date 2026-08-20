@@ -10,17 +10,16 @@ JOIN blog.owner_accounts AS owner ON owner.id = p.owner_id AND owner.singleton_k
 WHERE audit.action = 'create'
   AND audit.changes->>'source' = 'local-import';
 
+-- 先审阅本次事务将删除的文章集合；确认无误后再继续执行。
+SELECT id, owner_id FROM cleanup_local_import_posts ORDER BY id;
+
 -- 只删除带有 local-import 来源审计的文章及其关系/审计。
 DELETE FROM blog.post_tags
 WHERE post_id IN (SELECT id FROM cleanup_local_import_posts);
 
 DELETE FROM blog.post_audit_events
 WHERE post_id IN (SELECT id FROM cleanup_local_import_posts)
-   OR (
-     action = 'create'
-     AND changes->>'source' = 'local-import'
-     AND actor_account_id IN (SELECT owner_id FROM cleanup_local_import_posts)
-   );
+  AND actor_account_id IN (SELECT owner_id FROM cleanup_local_import_posts);
 
 DELETE FROM blog.posts
 WHERE id IN (SELECT id FROM cleanup_local_import_posts);
@@ -37,6 +36,7 @@ WHERE t.slug IN ('nextjs', 'typescript', 'react', 'css', 'accessibility', 'archi
 -- 仅清掉导入的演示站点 singleton；owner/profile/session 保留。
 DELETE FROM blog.site_settings
 WHERE singleton_key = 1
+  AND EXISTS (SELECT 1 FROM blog.owner_accounts WHERE singleton_key = 1)
   AND name = '棱镜手记'
   AND description = '记录设计、代码与日常观察的独立博客。'
   AND logo_src = '/images/brand/logo.svg'

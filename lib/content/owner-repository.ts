@@ -3,7 +3,7 @@ import "server-only";
 import { z } from "zod";
 
 import { ApiProblem } from "@/lib/api/problem";
-import { contentBlockSchema, contentBlocksSchema, type OwnerPostUpdateInput } from "@/lib/content/schemas";
+import { contentBlockSchema, type OwnerPostUpdateInput } from "@/lib/content/schemas";
 import type { QueryExecutor } from "@/lib/content/contracts";
 import type { ContentBlock, OwnerPost, PostStatus, TaxonomyDefinition } from "@/lib/content/types";
 import { queryRows } from "@/lib/db/runtime";
@@ -152,6 +152,36 @@ export function createOwnerContentRepository(executor: QueryExecutor) {
     }
     if (current.status === "published" && (!input.excerpt?.trim() || !input.category || !input.cover || input.body.length === 0)) {
       throw new ApiProblem(422, "VALIDATION_FAILED", "已发布文章必须包含摘要、分类、封面和正文");
+    }
+
+    if (input.category) {
+      const categoryRows = await executor.queryRows(
+        "SELECT 1 FROM blog.categories WHERE slug = $1 LIMIT 1",
+        [input.category],
+      );
+      if (!categoryRows.length) {
+        throw new ApiProblem(422, "VALIDATION_FAILED", "分类不存在", [
+          { field: "category", reason: "CUSTOM", message: "分类不存在" },
+        ]);
+      }
+    }
+
+    const uniqueTags = [...new Set(input.tags)];
+    if (uniqueTags.length !== input.tags.length) {
+      throw new ApiProblem(422, "VALIDATION_FAILED", "标签不能重复", [
+        { field: "tags", reason: "CUSTOM", message: "标签不能重复" },
+      ]);
+    }
+    if (uniqueTags.length) {
+      const tagRows = await executor.queryRows(
+        "SELECT slug FROM blog.tags WHERE slug = ANY($1::text[])",
+        [uniqueTags],
+      );
+      if (tagRows.length !== uniqueTags.length) {
+        throw new ApiProblem(422, "VALIDATION_FAILED", "存在不存在的标签", [
+          { field: "tags", reason: "CUSTOM", message: "存在不存在的标签" },
+        ]);
+      }
     }
     const cover = input.cover;
     const rows = await executor.queryRows(

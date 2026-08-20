@@ -22,22 +22,32 @@ export async function handleContentRead(
 }
 
 export function contentMethodNotAllowed(request: NextRequest) {
+  return contentMethodNotAllowedWithAllow(request, contentReadAllow);
+}
+
+export function contentMethodNotAllowedWithAllow(
+  request: NextRequest,
+  allow: string,
+) {
   return handleContentRead(request, async (requestId) => {
     const response = errorResponse(
       new ApiProblem(405, "METHOD_NOT_ALLOWED", "请求方法不受支持"),
       requestId,
     );
-    response.headers.set("Allow", contentReadAllow);
+    response.headers.set("Allow", allow);
     return response;
   });
 }
 
-export function contentReadOptions(request?: Pick<Request, "headers">) {
+export function contentReadOptions(
+  request?: Pick<Request, "headers">,
+  allow = contentReadAllow,
+) {
   const requestId = createRequestId(request);
   return new NextResponse(null, {
     status: 204,
     headers: {
-      Allow: contentReadAllow,
+      Allow: allow,
       "Cache-Control": "private, no-store",
       "X-Request-ID": requestId,
     },

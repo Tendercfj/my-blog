@@ -71,12 +71,12 @@ export const contentBlockSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("quote"),
     text: nonBlankStringSchema,
-    cite: z.string().optional(),
+    cite: z.string().nullable().optional().transform((value) => value ?? undefined),
   }),
   z.object({
     type: z.literal("image"),
     image: imageSchema,
-    caption: z.string().optional(),
+    caption: z.string().nullable().optional().transform((value) => value ?? undefined),
   }),
   z.object({
     type: z.literal("code"),

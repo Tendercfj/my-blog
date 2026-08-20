@@ -37,15 +37,31 @@ const siteSql = `
     COALESCE(s.logo_height, 96) AS logo_height,
     COALESCE(s.announcement, '') AS announcement,
     COALESCE(s.navigation, '[]'::jsonb) AS navigation,
-    COALESCE(p.name, split_part(o.email, '@', 1), '站长') AS author_name,
-    COALESCE(p.role, '站长') AS author_role,
-    COALESCE(p.bio, '') AS author_bio,
+    CASE
+      WHEN p.name = '林屿' AND p.role = '独立开发者与设计爱好者'
+        THEN split_part(o.email, '@', 1)
+      ELSE COALESCE(p.name, split_part(o.email, '@', 1), '站长')
+    END AS author_name,
+    CASE
+      WHEN p.name = '林屿' AND p.role = '独立开发者与设计爱好者' THEN '站长'
+      ELSE COALESCE(p.role, '站长')
+    END AS author_role,
+    CASE
+      WHEN p.name = '林屿' AND p.role = '独立开发者与设计爱好者' THEN ''
+      ELSE COALESCE(p.bio, '')
+    END AS author_bio,
     COALESCE(p.avatar_src, '/images/brand/avatar.svg') AS avatar_src,
     COALESCE(p.avatar_alt, '站长头像') AS avatar_alt,
     COALESCE(p.avatar_width, 240) AS avatar_width,
     COALESCE(p.avatar_height, 240) AS avatar_height,
-    COALESCE(p.links, '[]'::jsonb) AS author_links,
-    COALESCE(p.about, '{}'::jsonb) AS about
+    CASE
+      WHEN p.name = '林屿' AND p.role = '独立开发者与设计爱好者' THEN '[]'::jsonb
+      ELSE COALESCE(p.links, '[]'::jsonb)
+    END AS author_links,
+    CASE
+      WHEN p.name = '林屿' AND p.role = '独立开发者与设计爱好者' THEN '{}'::jsonb
+      ELSE COALESCE(p.about, '{}'::jsonb)
+    END AS about
   FROM blog.owner_accounts AS o
   LEFT JOIN blog.site_settings AS s ON s.singleton_key = 1
   LEFT JOIN blog.author_profiles AS p ON p.account_id = o.id

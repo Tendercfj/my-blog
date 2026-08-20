@@ -6,6 +6,10 @@ import { toOwnerPostDto } from "@/lib/content/dto";
 import { listOwnerPosts } from "@/lib/content/owner-repository";
 import { requireApiSession } from "@/lib/auth/api-session";
 import { createRequestId, errorResponse } from "@/lib/api/response";
+import {
+  contentMethodNotAllowedWithAllow,
+  contentReadOptions,
+} from "@/lib/content/http";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,3 +25,13 @@ export async function GET(request: NextRequest) {
     return errorResponse(error, requestId);
   }
 }
+
+export function OPTIONS(request: NextRequest) {
+  return contentReadOptions(request, "GET, HEAD, OPTIONS");
+}
+
+export const POST = (request: NextRequest) =>
+  contentMethodNotAllowedWithAllow(request, "GET, HEAD, OPTIONS");
+export const PUT = POST;
+export const PATCH = POST;
+export const DELETE = POST;
