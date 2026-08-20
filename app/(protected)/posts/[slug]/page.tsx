@@ -7,10 +7,10 @@ import { StandardTwoColumnLayout } from "@/components/site/page-layout";
 import { BlogSidebar } from "@/components/sidebar/blog-sidebar";
 import { requireCurrentSession } from "@/lib/auth/session";
 import {
-  getPostBySlug,
+  getPublishedPostBySlug,
   getSidebarData,
   getSiteConfig,
-} from "@/lib/content/repository";
+} from "@/lib/content/service";
 import { absoluteUrl, createPageMetadata, serializeJsonLd } from "@/lib/metadata";
 import { routes } from "@/lib/routes";
 
@@ -19,7 +19,10 @@ type PageProps = { params: Promise<{ slug: string }> };
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   await requireCurrentSession();
   const { slug } = await params;
-  const [site, post] = await Promise.all([getSiteConfig(), getPostBySlug(slug)]);
+  const [site, post] = await Promise.all([
+    getSiteConfig(),
+    getPublishedPostBySlug(slug),
+  ]);
   if (!post) notFound();
   return createPageMetadata(site, {
     title: post.title,
@@ -32,7 +35,10 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 export default async function PostPage({ params }: PageProps) {
   await requireCurrentSession();
   const { slug } = await params;
-  const [post, sidebar] = await Promise.all([getPostBySlug(slug), getSidebarData()]);
+  const [post, sidebar] = await Promise.all([
+    getPublishedPostBySlug(slug),
+    getSidebarData(),
+  ]);
   if (!post) notFound();
 
   const jsonLd = {

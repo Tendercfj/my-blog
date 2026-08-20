@@ -1,5 +1,25 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## 内容数据源
+
+服务端通过 `BLOG_CONTENT_SOURCE=local|neon` 显式选择内容 repository。本地开发和测试可以使用 `local`；production 只接受 `neon`。选择 `neon` 后，缺少 `DATABASE_URL`、查询失败或数据库行无效都会明确失败，不会自动回退到本地旧内容。
+
+```bash
+rtk pnpm test
+rtk pnpm schema:verify
+```
+
+版本化 SQL 位于 `db/migrations/`，只允许通过 `DATABASE_URL_UNPOOLED` 对 disposable/local database 或明确批准的隔离 Neon branch 执行。应用 runtime 只读取 pooled `DATABASE_URL`，不会自动运行 migration。
+
+导入现有 `content/site.ts` 与 `content/posts.ts` 时先运行 dry-run：
+
+```bash
+rtk pnpm content:import
+rtk pnpm content:import -- --apply
+```
+
+默认命令只验证并报告目标状态；`--apply` 才会写入。目标已有任何文章时会拒绝，owner 凭据与 session 永远不会被覆盖，全部内容写入在一个短事务中提交。
+
 ## Cloudflare R2 上传
 
 复制 `.env.example` 为 `.env`，填写 Cloudflare R2 的 S3 API 凭据（Account ID、Access Key ID、Secret Access Key 和 Bucket 名称）。上传方法位于 [`lib/storage/r2.ts`](/Users/xy/Desktop/test/my-blog/lib/storage/r2.ts)，只允许在服务端调用：

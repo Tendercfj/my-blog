@@ -6,11 +6,7 @@ import { FloatingTools } from "@/components/site/floating-tools";
 import { SiteFooter } from "@/components/site/site-footer";
 import { SiteHeader } from "@/components/site/site-header";
 import { requireCurrentSession } from "@/lib/auth/session";
-import {
-  getSearchIndex,
-  getSiteConfig,
-  getSiteStats,
-} from "@/lib/content/repository";
+import { getSiteConfig, getSiteStats } from "@/lib/content/service";
 
 export async function generateMetadata(): Promise<Metadata> {
   await requireCurrentSession();
@@ -39,14 +35,10 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function ProtectedLayout({ children }: { children: ReactNode }) {
   await requireCurrentSession();
-  const [site, searchDocuments, stats] = await Promise.all([
-    getSiteConfig(),
-    getSearchIndex(),
-    getSiteStats(),
-  ]);
+  const [site, stats] = await Promise.all([getSiteConfig(), getSiteStats()]);
 
   return (
-    <SearchProvider documents={searchDocuments}>
+    <SearchProvider>
       <a className="skip-link" href="#main-content">
         跳到主要内容
       </a>

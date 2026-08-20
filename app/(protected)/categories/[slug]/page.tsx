@@ -9,11 +9,11 @@ import { StandardTwoColumnLayout } from "@/components/site/page-layout";
 import { BlogSidebar } from "@/components/sidebar/blog-sidebar";
 import { requireCurrentSession } from "@/lib/auth/session";
 import {
-  getAllCategories,
-  getPostsByCategory,
+  getCategories,
+  getPublishedPostsByCategory,
   getSidebarData,
   getSiteConfig,
-} from "@/lib/content/repository";
+} from "@/lib/content/service";
 import { createPageMetadata } from "@/lib/metadata";
 import { routes } from "@/lib/routes";
 
@@ -22,7 +22,10 @@ type PageProps = { params: Promise<{ slug: string }> };
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   await requireCurrentSession();
   const { slug } = await params;
-  const [site, categories] = await Promise.all([getSiteConfig(), getAllCategories()]);
+  const [site, categories] = await Promise.all([
+    getSiteConfig(),
+    getCategories(),
+  ]);
   const category = categories.find((item) => item.slug === slug);
   if (!category) notFound();
   return createPageMetadata(site, {
@@ -36,8 +39,8 @@ export default async function CategoryDetailPage({ params }: PageProps) {
   await requireCurrentSession();
   const { slug } = await params;
   const [posts, categories, sidebar] = await Promise.all([
-    getPostsByCategory(slug),
-    getAllCategories(),
+    getPublishedPostsByCategory(slug),
+    getCategories(),
     getSidebarData(),
   ]);
   const category = categories.find((item) => item.slug === slug);
@@ -48,7 +51,7 @@ export default async function CategoryDetailPage({ params }: PageProps) {
       <PageIntro
         eyebrow="Category"
         title={`${category.name} · ${category.count}`}
-        description={`收录“${category.name}”分类下的全部示例文章。`}
+        description={`收录“${category.name}”分类下的全部已发布文章。`}
         icon={<Folder className="size-4" aria-hidden="true" />}
       />
       {posts.length ? (

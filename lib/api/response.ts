@@ -1,20 +1,41 @@
 import { randomUUID } from "node:crypto";
 
 import { NextResponse } from "next/server";
-import { ZodError } from "zod";
 
 import { ApiProblem, type ApiErrorDetail } from "@/lib/api/problem";
 import { DatabaseUnavailableError } from "@/lib/db/runtime";
 import { R2ConfigurationError, R2StorageError } from "@/lib/storage/r2";
 
-export function createRequestId(): string {
-  return randomUUID();
+const requestIdPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export function createRequestId(request?: Pick<Request, "headers">): string {
+  const supplied = request?.headers.get("x-request-id")?.trim();
+  return supplied && requestIdPattern.test(supplied) ? supplied : randomUUID();
+}
+
+function applyResponseHeaders(response: NextResponse, requestId: string) {
+  response.headers.set("Cache-Control", "private, no-store");
+  response.headers.set("X-Request-ID", requestId);
+  return response;
 }
 
 export function jsonData<T>(data: T, requestId: string, init?: ResponseInit) {
   const response = NextResponse.json({ data, meta: { requestId } }, init);
-  response.headers.set("Cache-Control", "private, no-store");
-  return response;
+  return applyResponseHeaders(response, requestId);
+}
+
+export function jsonPage<T>(
+  data: readonly T[],
+  pageInfo: { nextCursor: string | null; hasNextPage: boolean },
+  requestId: string,
+  init?: ResponseInit,
+) {
+  const response = NextResponse.json(
+    { data, pageInfo, meta: { requestId } },
+    init,
+  );
+  return applyResponseHeaders(response, requestId);
 }
 
 function jsonError(
@@ -36,19 +57,11 @@ function jsonError(
     },
     { status },
   );
-  response.headers.set("Cache-Control", "private, no-store");
+  applyResponseHeaders(response, requestId);
   if (retryAfterSeconds) {
     response.headers.set("Retry-After", String(retryAfterSeconds));
   }
   return response;
-}
-
-function zodDetails(error: ZodError): readonly ApiErrorDetail[] {
-  return error.issues.map((issue) => ({
-    field: issue.path.join(".") || undefined,
-    reason: issue.code.toUpperCase(),
-    message: issue.message,
-  }));
 }
 
 export function errorResponse(error: unknown, requestId: string) {
@@ -60,16 +73,6 @@ export function errorResponse(error: unknown, requestId: string) {
       requestId,
       error.details,
       error.retryAfterSeconds,
-    );
-  }
-
-  if (error instanceof ZodError) {
-    return jsonError(
-      422,
-      "VALIDATION_FAILED",
-      "请求字段校验失败",
-      requestId,
-      zodDetails(error),
     );
   }
 

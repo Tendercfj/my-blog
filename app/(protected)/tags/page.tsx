@@ -4,16 +4,24 @@ import { Hash } from "lucide-react";
 import { TagCloud } from "@/components/blog/tag-cloud";
 import { FullWidthLayout } from "@/components/site/page-layout";
 import { requireCurrentSession } from "@/lib/auth/session";
-import { getAllTags } from "@/lib/content/repository";
+import { getSiteConfig, getTags } from "@/lib/content/service";
+import { createPageMetadata } from "@/lib/metadata";
+import { routes } from "@/lib/routes";
 
-export const metadata: Metadata = {
-  title: "标签",
-  description: "通过标签浏览棱镜手记的示例文章。",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  await requireCurrentSession();
+  const [site, tags] = await Promise.all([getSiteConfig(), getTags()]);
+  const activeCount = tags.filter((tag) => tag.count > 0).length;
+  return createPageMetadata(site, {
+    title: "标签",
+    description: `通过 ${activeCount} 个标签浏览 ${site.name} 的已发布文章。`,
+    path: routes.tags,
+  });
+}
 
 export default async function TagsPage() {
   await requireCurrentSession();
-  const tags = await getAllTags();
+  const tags = await getTags();
   return (
     <FullWidthLayout>
       <section className="glass-card px-5 py-8 text-center sm:px-10 sm:py-12">

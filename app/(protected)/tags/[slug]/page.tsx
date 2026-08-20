@@ -9,11 +9,11 @@ import { StandardTwoColumnLayout } from "@/components/site/page-layout";
 import { BlogSidebar } from "@/components/sidebar/blog-sidebar";
 import { requireCurrentSession } from "@/lib/auth/session";
 import {
-  getAllTags,
-  getPostsByTag,
+  getPublishedPostsByTag,
   getSidebarData,
   getSiteConfig,
-} from "@/lib/content/repository";
+  getTags,
+} from "@/lib/content/service";
 import { createPageMetadata } from "@/lib/metadata";
 import { routes } from "@/lib/routes";
 
@@ -22,7 +22,7 @@ type PageProps = { params: Promise<{ slug: string }> };
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   await requireCurrentSession();
   const { slug } = await params;
-  const [site, tags] = await Promise.all([getSiteConfig(), getAllTags()]);
+  const [site, tags] = await Promise.all([getSiteConfig(), getTags()]);
   const tag = tags.find((item) => item.slug === slug);
   if (!tag) notFound();
   return createPageMetadata(site, {
@@ -36,8 +36,8 @@ export default async function TagDetailPage({ params }: PageProps) {
   await requireCurrentSession();
   const { slug } = await params;
   const [posts, tags, sidebar] = await Promise.all([
-    getPostsByTag(slug),
-    getAllTags(),
+    getPublishedPostsByTag(slug),
+    getTags(),
     getSidebarData(),
   ]);
   const tag = tags.find((item) => item.slug === slug);
@@ -48,7 +48,7 @@ export default async function TagDetailPage({ params }: PageProps) {
       <PageIntro
         eyebrow="Tag"
         title={`# ${tag.name} · ${tag.count}`}
-        description={`收录所有与“${tag.name}”有关的示例文章。`}
+        description={`收录所有与“${tag.name}”有关的已发布文章。`}
         icon={<Hash className="size-4" aria-hidden="true" />}
       />
       {posts.length ? (

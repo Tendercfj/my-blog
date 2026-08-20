@@ -5,12 +5,18 @@ import { HomeHero } from "@/components/home/home-hero";
 import { StandardTwoColumnLayout } from "@/components/site/page-layout";
 import { BlogSidebar } from "@/components/sidebar/blog-sidebar";
 import { requireCurrentSession } from "@/lib/auth/session";
-import { getAllPosts, getSidebarData } from "@/lib/content/repository";
+import {
+  getPublishedPosts,
+  getSidebarData,
+} from "@/lib/content/service";
 import { absoluteUrl, serializeJsonLd } from "@/lib/metadata";
 
 export default async function Home() {
   await requireCurrentSession();
-  const [posts, sidebar] = await Promise.all([getAllPosts(), getSidebarData()]);
+  const [posts, sidebar] = await Promise.all([
+    getPublishedPosts(),
+    getSidebarData(),
+  ]);
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Blog",

@@ -4,12 +4,19 @@ import Image from "next/image";
 
 import { FullWidthLayout } from "@/components/site/page-layout";
 import { requireCurrentSession } from "@/lib/auth/session";
-import { getSiteConfig } from "@/lib/content/repository";
+import { getSiteConfig } from "@/lib/content/service";
+import { createPageMetadata } from "@/lib/metadata";
+import { routes } from "@/lib/routes";
 
-export const metadata: Metadata = {
-  title: "关于",
-  description: "关于棱镜手记与这套博客布局。",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  await requireCurrentSession();
+  const site = await getSiteConfig();
+  return createPageMetadata(site, {
+    title: "关于",
+    description: site.about.summary || `关于 ${site.name} 与作者 ${site.author.name}。`,
+    path: routes.about,
+  });
+}
 
 export default async function AboutPage() {
   await requireCurrentSession();

@@ -3,6 +3,7 @@ import "server-only";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 
+import { contentSlugSchema } from "@/lib/content/slug";
 import type {
   ContentBlock,
   LocalImage,
@@ -10,7 +11,6 @@ import type {
   SiteConfig,
 } from "@/lib/content/types";
 
-const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 const r2ImageOrigin = "https://assets.tendercfj.cc.cd";
 
@@ -55,7 +55,10 @@ function validateBlocks(blocks: readonly ContentBlock[], slug: string): void {
     switch (block.type) {
       case "heading":
         assert(block.text.trim(), `${slug}: heading text cannot be empty`);
-        assert(slugPattern.test(block.id), `${slug}: invalid heading id ${block.id}`);
+        assert(
+          contentSlugSchema.safeParse(block.id).success,
+          `${slug}: invalid heading id ${block.id}`,
+        );
         assert(!headingIds.has(block.id), `${slug}: duplicate heading id ${block.id}`);
         headingIds.add(block.id);
         break;
@@ -89,7 +92,10 @@ function validateDefinitions(
 ): Set<string> {
   const slugs = new Set<string>();
   for (const value of values) {
-    assert(slugPattern.test(value.slug), `${owner}: invalid slug ${value.slug}`);
+    assert(
+      contentSlugSchema.safeParse(value.slug).success,
+      `${owner}: invalid slug ${value.slug}`,
+    );
     assert(value.name.trim(), `${owner}: name cannot be empty`);
     assert(!slugs.has(value.slug), `${owner}: duplicate slug ${value.slug}`);
     slugs.add(value.slug);
@@ -111,7 +117,10 @@ export function validateContent(site: SiteConfig, posts: readonly PostRecord[]):
   const postSlugs = new Set<string>();
 
   for (const post of posts) {
-    assert(slugPattern.test(post.slug), `invalid post slug ${post.slug}`);
+    assert(
+      contentSlugSchema.safeParse(post.slug).success,
+      `invalid post slug ${post.slug}`,
+    );
     assert(!postSlugs.has(post.slug), `duplicate post slug ${post.slug}`);
     postSlugs.add(post.slug);
     assert(post.title.trim() && post.excerpt.trim(), `${post.slug}: title and excerpt are required`);

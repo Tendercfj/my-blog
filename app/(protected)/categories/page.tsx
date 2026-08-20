@@ -4,16 +4,27 @@ import { FolderTree } from "lucide-react";
 import { CategoryList } from "@/components/blog/category-list";
 import { FullWidthLayout } from "@/components/site/page-layout";
 import { requireCurrentSession } from "@/lib/auth/session";
-import { getAllCategories } from "@/lib/content/repository";
+import { getCategories, getSiteConfig } from "@/lib/content/service";
+import { createPageMetadata } from "@/lib/metadata";
+import { routes } from "@/lib/routes";
 
-export const metadata: Metadata = {
-  title: "分类",
-  description: "通过分类浏览棱镜手记的示例文章。",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  await requireCurrentSession();
+  const [site, categories] = await Promise.all([
+    getSiteConfig(),
+    getCategories(),
+  ]);
+  const activeCount = categories.filter((category) => category.count > 0).length;
+  return createPageMetadata(site, {
+    title: "分类",
+    description: `通过 ${activeCount} 个分类浏览 ${site.name} 的已发布文章。`,
+    path: routes.categories,
+  });
+}
 
 export default async function CategoriesPage() {
   await requireCurrentSession();
-  const categories = await getAllCategories();
+  const categories = await getCategories();
   return (
     <FullWidthLayout>
       <section className="glass-card px-5 py-8 sm:px-10 sm:py-12">

@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { ApiProblem } from "@/lib/api/problem";
 import { createRequestId, errorResponse, jsonData } from "@/lib/api/response";
+import { parseApiInput } from "@/lib/api/validation";
 import { sessionCookie } from "@/lib/auth/cookie";
 import { isSameOrigin } from "@/lib/auth/origin";
 import { registerOwner } from "@/lib/auth/service";
@@ -24,7 +25,7 @@ export async function POST(request: NextRequest) {
       throw new ApiProblem(400, "INVALID_JSON", "请求 JSON 无法解析");
     }
 
-    const input = registerInputSchema.parse(body);
+    const input = parseApiInput(registerInputSchema, body);
     const { owner, issued } = await registerOwner(input, new URL(request.url).origin);
     const response = jsonData(
       {

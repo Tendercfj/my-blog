@@ -3,7 +3,7 @@
   "name": "content-read-api-pages",
   "title": "内容读取接口与展示页",
   "description": "实现全部内容读取 API，并将 8 个现有展示页切换到统一数据源",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,

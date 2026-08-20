@@ -7,12 +7,13 @@ import {
   createContext,
   type ReactNode,
   useContext,
-  useMemo,
+  useEffect,
   useRef,
   useState,
 } from "react";
 
-import { searchDocuments } from "@/lib/content/search";
+import { getJson } from "@/lib/api/client";
+import { searchSuccessEnvelopeSchema } from "@/lib/content/api-contract";
 import type { SearchDocument } from "@/lib/content/types";
 import { formatDate } from "@/lib/date";
 import { routes } from "@/lib/routes";
@@ -25,23 +26,62 @@ const SearchContext = createContext<SearchContextValue | null>(null);
 
 export function SearchProvider({
   children,
-  documents,
 }: {
   children: ReactNode;
-  documents: readonly SearchDocument[];
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [results, setResults] = useState<readonly SearchDocument[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const triggerRef = useRef<HTMLElement | null>(null);
-  const results = useMemo(
-    () => searchDocuments(documents, query).slice(0, 8),
-    [documents, query],
-  );
+
+  useEffect(() => {
+    const normalizedQuery = query.normalize("NFKC").trim();
+    if (!normalizedQuery) return;
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await getJson(
+          `/api/v1/search?q=${encodeURIComponent(normalizedQuery)}&limit=8`,
+          searchSuccessEnvelopeSchema,
+          { signal: controller.signal },
+        );
+        if (!controller.signal.aborted) setResults(response.data);
+      } catch (requestError) {
+        if (!controller.signal.aborted) {
+          setResults([]);
+          setError(
+            requestError instanceof Error
+              ? requestError.message
+              : "搜索失败，请稍后重试。",
+          );
+        }
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    }, 180);
+
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [query]);
+
+  const resetSearch = () => {
+    setQuery("");
+    setResults([]);
+    setLoading(false);
+    setError(null);
+  };
 
   const close = () => {
     setOpen(false);
-    setQuery("");
+    resetSearch();
   };
 
   return (
@@ -58,7 +98,7 @@ export function SearchProvider({
         open={open}
         onOpenChange={(nextOpen) => {
           setOpen(nextOpen);
-          if (!nextOpen) setQuery("");
+          if (!nextOpen) resetSearch();
         }}
       >
         <Dialog.Portal>
@@ -91,7 +131,13 @@ export function SearchProvider({
                 <input
                   ref={inputRef}
                   value={query}
-                  onChange={(event) => setQuery(event.target.value)}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setQuery(value);
+                    setResults([]);
+                    setError(null);
+                    setLoading(Boolean(value.normalize("NFKC").trim()));
+                  }}
                   className="min-w-0 flex-1 bg-transparent py-3 text-base outline-none placeholder:text-muted-foreground"
                   placeholder="输入关键词…"
                 />
@@ -100,6 +146,14 @@ export function SearchProvider({
                 {!query.trim() ? (
                   <p className="rounded-xl bg-muted px-4 py-8 text-center text-sm text-muted-foreground">
                     试试搜索 “Next.js”、“设计” 或 “工作流”
+                  </p>
+                ) : loading ? (
+                  <p className="rounded-xl bg-muted px-4 py-8 text-center text-sm text-muted-foreground" role="status">
+                    正在搜索…
+                  </p>
+                ) : error ? (
+                  <p className="rounded-xl bg-destructive/10 px-4 py-8 text-center text-sm text-destructive" role="alert">
+                    {error}
                   </p>
                 ) : results.length ? (
                   <ul className="space-y-2">
