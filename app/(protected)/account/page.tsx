@@ -18,14 +18,19 @@ export const metadata: Metadata = {
 
 export default async function AccountPage() {
   const session = await requireCurrentSession();
-  const [site, posts] = await Promise.all([
+  const [site, allPosts] = await Promise.all([
     getSiteConfig(),
-    listOwnerPosts(session.accountId, { status: "published" }),
+    listOwnerPosts(session.accountId, { status: "all" }),
   ]);
+  const posts = allPosts.filter(
+    (post) => post.status === "draft" || post.status === "published",
+  );
+  const draftCount = posts.filter((post) => post.status === "draft").length;
+  const publishedCount = posts.length - draftCount;
 
   return (
     <FullWidthLayout>
-      <section className="mx-auto w-full max-w-3xl py-4 sm:py-10">
+      <section className="mx-auto w-full max-w-4xl py-4 sm:py-10">
         <div className="glass-card overflow-hidden">
           <div className="border-b border-border bg-primary/6 px-5 py-7 sm:px-8">
             <p className="flex items-center gap-2 text-xs font-bold tracking-[0.16em] text-primary uppercase">
@@ -47,10 +52,17 @@ export default async function AccountPage() {
             <section className="rounded-xl border border-border bg-background/65 p-5" aria-labelledby="owner-posts-title">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h2 id="owner-posts-title" className="text-lg font-bold text-card-foreground">已发布文章</h2>
-                  <p className="mt-1 text-sm text-muted-foreground">共 {posts.length} 篇，修改会保留文章 slug。</p>
+                  <h2 id="owner-posts-title" className="text-lg font-bold text-card-foreground">文章管理</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    草稿 {draftCount} 篇 · 已发布 {publishedCount} 篇
+                  </p>
                 </div>
-                <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">Owner: {session.email}</span>
+                <Link
+                  href={routes.accountPostNew}
+                  className="inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90"
+                >
+                  <Plus className="size-4" aria-hidden="true" />新建文章
+                </Link>
               </div>
               {posts.length ? (
                 <ul className="mt-4 divide-y divide-border rounded-lg border border-border">
@@ -58,7 +70,13 @@ export default async function AccountPage() {
                     <li key={post.id} className="flex flex-wrap items-center justify-between gap-3 p-4">
                       <div className="min-w-0">
                         <h3 className="truncate font-semibold text-card-foreground">{post.title}</h3>
-                        <p className="mt-1 text-xs text-muted-foreground">版本 {post.version} · {post.publishedAt?.slice(0, 10) ?? "未发布"}</p>
+                        <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                          <span className={post.status === "draft" ? "text-amber-700 dark:text-amber-300" : "text-emerald-700 dark:text-emerald-300"}>
+                            {post.status === "draft" ? "草稿" : "已发布"}
+                          </span>
+                          <span>版本 {post.version}</span>
+                          <span>{post.publishedAt?.slice(0, 10) ?? "尚未发布"}</span>
+                        </p>
                       </div>
                       <Link href={routes.accountPostEdit(post.id)} className="inline-flex items-center gap-1 rounded-lg border border-primary/30 px-3 py-2 text-sm font-semibold text-primary hover:bg-primary/8">
                         <FilePenLine className="size-4" aria-hidden="true" />编辑
@@ -69,7 +87,13 @@ export default async function AccountPage() {
               ) : (
                 <div className="mt-4 rounded-lg border border-dashed border-border p-8 text-center">
                   <Plus className="mx-auto size-6 text-primary" aria-hidden="true" />
-                  <p className="mt-2 text-sm text-muted-foreground">还没有已发布文章。可以先从内容导入或发布流程开始。</p>
+                  <p className="mt-2 text-sm text-muted-foreground">还没有文章，从一篇新草稿开始吧。</p>
+                  <Link
+                    href={routes.accountPostNew}
+                    className="mt-4 inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-2 text-sm font-bold text-primary-foreground"
+                  >
+                    <Plus className="size-4" aria-hidden="true" />创建第一篇文章
+                  </Link>
                 </div>
               )}
             </section>

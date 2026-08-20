@@ -2,7 +2,11 @@ import { z } from "zod";
 
 import { parseApiInput } from "@/lib/api/validation";
 import { contentSlugSchema } from "@/lib/content/slug";
-import { ownerPostUpdateSchema } from "@/lib/content/schemas";
+import {
+  ownerPostCreateSchema,
+  ownerPostPublishSchema,
+  ownerPostUpdateSchema,
+} from "@/lib/content/schemas";
 import type { IsoDate } from "@/lib/content/types";
 
 const integerQuery = (minimum: number, maximum: number) =>
@@ -53,7 +57,9 @@ export const ownerPostsQuerySchema = z
   .strict();
 
 export const ownerPostIdSchema = z.string().uuid();
+export const ownerPostPostSchema = ownerPostCreateSchema;
 export const ownerPostPatchSchema = ownerPostUpdateSchema;
+export const ownerPostPublishBodySchema = ownerPostPublishSchema;
 
 export const slugPathSchema = contentSlugSchema;
 

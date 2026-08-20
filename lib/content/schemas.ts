@@ -102,8 +102,8 @@ export const contentBlocksSchema = z
     }
   });
 
-export const ownerPostUpdateSchema = z.object({
-  version: z.number().int().positive(),
+const ownerPostWriteFields = {
+  slug: contentSlugSchema,
   title: nonBlankStringSchema.max(240),
   excerpt: z.string().trim().max(1000).nullable(),
   category: contentSlugSchema.nullable(),
@@ -111,8 +111,22 @@ export const ownerPostUpdateSchema = z.object({
   cover: imageSchema.nullable(),
   featured: z.boolean(),
   body: contentBlocksSchema,
-}).strict();
+};
 
+export const ownerPostCreateSchema = z.object(ownerPostWriteFields).strict();
+
+export const ownerPostUpdateSchema = z
+  .object({
+    version: z.number().int().positive(),
+    ...ownerPostWriteFields,
+  })
+  .strict();
+
+export const ownerPostPublishSchema = z
+  .object({ version: z.number().int().positive() })
+  .strict();
+
+export type OwnerPostCreateInput = z.infer<typeof ownerPostCreateSchema>;
 export type OwnerPostUpdateInput = z.infer<typeof ownerPostUpdateSchema>;
 
 const navigationSchema = z.array(

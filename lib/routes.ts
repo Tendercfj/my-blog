@@ -8,6 +8,7 @@ export const routes = {
   about: "/about",
   login: "/login",
   account: "/account",
+  accountPostNew: "/account/posts/new",
   accountPostEdit: (id: string) => `/account/posts/${id}/edit`,
   post: (slug: string) => `/posts/${slug}`,
 } as const;
