@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { posts } from "@/content/posts";
 import { siteConfig } from "@/content/site";
 import {
+  loadLocalContent,
   parseImportArguments,
   runContentImport,
 } from "@/scripts/import-local-content-lib.mjs";
@@ -21,6 +22,13 @@ function sqlFixture(preflight: Record<string, unknown>) {
 }
 
 describe("local content import", () => {
+  it("loads and validates the checked-in TypeScript content modules", async () => {
+    await expect(loadLocalContent()).resolves.toMatchObject({
+      site: { name: siteConfig.name },
+      posts,
+    });
+  });
+
   it("is dry-run by default and never opens a transaction", async () => {
     expect(parseImportArguments([])).toEqual({ apply: false, help: false });
     const sql = sqlFixture({

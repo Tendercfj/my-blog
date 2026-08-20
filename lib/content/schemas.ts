@@ -102,6 +102,19 @@ export const contentBlocksSchema = z
     }
   });
 
+export const ownerPostUpdateSchema = z.object({
+  version: z.number().int().positive(),
+  title: nonBlankStringSchema.max(240),
+  excerpt: z.string().trim().max(1000).nullable(),
+  category: contentSlugSchema.nullable(),
+  tags: z.array(contentSlugSchema).max(30),
+  cover: imageSchema.nullable(),
+  featured: z.boolean(),
+  body: contentBlocksSchema,
+}).strict();
+
+export type OwnerPostUpdateInput = z.infer<typeof ownerPostUpdateSchema>;
+
 const navigationSchema = z.array(
   z.object({ href: linkSchema, label: nonBlankStringSchema }),
 );
@@ -111,12 +124,12 @@ const authorLinksSchema = z.array(
 );
 
 const aboutSchema: z.ZodType<AboutContent> = z.object({
-  greeting: z.string(),
-  title: z.string(),
-  summary: z.string(),
-  skills: z.array(z.string()),
-  facts: z.array(z.object({ value: z.string(), label: z.string() })),
-  sections: z.array(z.object({ title: z.string(), body: z.string() })),
+  greeting: z.string().default("你好"),
+  title: z.string().default("关于我"),
+  summary: z.string().default(""),
+  skills: z.array(z.string()).default([]),
+  facts: z.array(z.object({ value: z.string(), label: z.string() })).default([]),
+  sections: z.array(z.object({ title: z.string(), body: z.string() })).default([]),
 });
 
 function decodeJson(value: unknown): unknown {

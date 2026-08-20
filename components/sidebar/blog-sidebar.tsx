@@ -37,7 +37,7 @@ export function BlogSidebar({ data, toc }: { data: SidebarData; toc?: readonly T
 
       <section className="glass-card p-5">
         <h2 className="flex items-center gap-2 font-bold text-card-foreground"><FileText className="size-4 text-primary" aria-hidden="true" />最新文章</h2>
-        <ul className="mt-3 space-y-3">
+        {data.recentPosts.length ? <ul className="mt-3 space-y-3">
           {data.recentPosts.map((post) => (
             <li key={post.slug}>
               <Link href={routes.post(post.slug)} className="group flex gap-3 rounded-lg">
@@ -51,12 +51,12 @@ export function BlogSidebar({ data, toc }: { data: SidebarData; toc?: readonly T
               </Link>
             </li>
           ))}
-        </ul>
+        </ul> : <p className="mt-3 text-sm text-muted-foreground">暂无文章</p>}
       </section>
 
       <section className="glass-card p-5">
         <h2 className="flex items-center gap-2 font-bold text-card-foreground"><Folder className="size-4 text-primary" aria-hidden="true" />分类</h2>
-        <ul className="mt-3 space-y-1">
+        {data.categories.some((category) => category.count > 0) ? <ul className="mt-3 space-y-1">
           {data.categories.map((category) => (
             <li key={category.slug}>
               <Link href={routes.category(category.slug)} className="flex items-center justify-between rounded-lg px-2 py-1.5 text-sm hover:bg-muted hover:text-primary">
@@ -64,7 +64,7 @@ export function BlogSidebar({ data, toc }: { data: SidebarData; toc?: readonly T
               </Link>
             </li>
           ))}
-        </ul>
+        </ul> : <p className="mt-3 text-sm text-muted-foreground">暂无分类</p>}
       </section>
 
       <section className="glass-card p-5">
@@ -75,18 +75,19 @@ export function BlogSidebar({ data, toc }: { data: SidebarData; toc?: readonly T
               {tag.name}
             </Link>
           ))}
+          {!data.tags.some((tag) => tag.count > 0) ? <span className="text-sm text-muted-foreground">暂无标签</span> : null}
         </div>
       </section>
 
       <section className="glass-card p-5">
         <h2 className="flex items-center gap-2 font-bold text-card-foreground"><CalendarRange className="size-4 text-primary" aria-hidden="true" />归档</h2>
-        <ul className="mt-3 space-y-1">
+        {data.archiveGroups.length ? <ul className="mt-3 space-y-1">
           {data.archiveGroups.map((group) => (
             <li key={group.year} className="flex items-center justify-between px-2 py-1 text-sm">
               <span>{group.year}</span><span className="text-xs text-muted-foreground">{group.posts.length} 篇</span>
             </li>
           ))}
-        </ul>
+        </ul> : <p className="mt-3 text-sm text-muted-foreground">暂无归档</p>}
       </section>
     </aside>
   );

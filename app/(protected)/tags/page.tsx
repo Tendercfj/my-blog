@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Hash } from "lucide-react";
 
 import { TagCloud } from "@/components/blog/tag-cloud";
+import { EmptyState } from "@/components/blog/empty-state";
 import { FullWidthLayout } from "@/components/site/page-layout";
 import { requireCurrentSession } from "@/lib/auth/session";
 import { getSiteConfig, getTags } from "@/lib/content/service";
@@ -30,7 +31,7 @@ export default async function TagsPage() {
         </p>
         <h1 className="mt-2 text-3xl font-black tracking-tight text-card-foreground sm:text-4xl">标签</h1>
         <p className="mx-auto mt-3 max-w-xl text-muted-foreground">用一组柔和的计数胶囊，找到彼此关联的主题。</p>
-        <TagCloud tags={tags} />
+        {tags.length ? <TagCloud tags={tags} /> : <div className="mx-auto mt-8 max-w-3xl"><EmptyState message="暂无标签，发布文章时可添加标签。" href={routes.account} label="进入账号工作区" /></div>}
       </section>
     </FullWidthLayout>
   );

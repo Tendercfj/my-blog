@@ -86,6 +86,26 @@ export interface PostRecord {
   body: readonly ContentBlock[];
 }
 
+export type PostStatus = "draft" | "published" | "archived";
+
+export interface OwnerPost {
+  id: string;
+  ownerId: string;
+  version: number;
+  status: PostStatus;
+  deletedAt: string | null;
+  slug: Slug | null;
+  title: string;
+  excerpt: string | null;
+  category: TaxonomyDefinition | null;
+  tags: readonly TaxonomyDefinition[];
+  cover: LocalImage | null;
+  featured: boolean;
+  body: readonly ContentBlock[];
+  publishedAt: string | null;
+  updatedAt: string;
+}
+
 export interface TaxonomySummary extends TaxonomyDefinition {
   count: number;
 }

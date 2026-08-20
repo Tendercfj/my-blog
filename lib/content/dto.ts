@@ -1,10 +1,22 @@
 import type {
   ArchiveYearGroup,
   ContentBlock,
+  OwnerPost,
   PostDetail,
   PostSummary,
   SidebarData,
 } from "@/lib/content/types";
+
+export function toOwnerPostDto(post: OwnerPost) {
+  return {
+    ...post,
+    excerpt: post.excerpt,
+    deletedAt: post.deletedAt,
+    publishedAt: post.publishedAt,
+    updatedAt: post.updatedAt,
+    body: post.body.map(toContentBlockDto),
+  };
+}
 
 function toContentBlockDto(block: ContentBlock) {
   switch (block.type) {

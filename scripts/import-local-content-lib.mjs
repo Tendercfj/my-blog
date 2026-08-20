@@ -1,41 +1,86 @@
 import { readFile } from "node:fs/promises";
+import { createRequire } from "node:module";
+import { pathToFileURL } from "node:url";
 
 import ts from "typescript";
 
 import { directSql } from "./auth-cli.mjs";
 
-async function loadTypeScriptModule(relativePath) {
-  const source = await readFile(new URL(relativePath, import.meta.url), "utf8");
-  const compiled = ts.transpileModule(
-    source.replace(/^import "server-only";\s*$/mu, ""),
-    {
-      compilerOptions: {
-        module: ts.ModuleKind.ESNext,
-        target: ts.ScriptTarget.ES2022,
-      },
-      fileName: relativePath,
-      reportDiagnostics: true,
-    },
-  );
-  const errors = compiled.diagnostics?.filter(
-    (diagnostic) => diagnostic.category === ts.DiagnosticCategory.Error,
-  );
-  if (errors?.length) {
-    throw new Error(
-      `无法加载 ${relativePath}: ${errors
-        .map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"))
-        .join("; ")}`,
-    );
+const require = createRequire(import.meta.url);
+
+function resolveTypeScriptModuleUrl(modulePath) {
+  if (modulePath.startsWith("@/")) {
+    return new URL(`../${modulePath.slice(2)}.ts`, import.meta.url);
   }
-  const encoded = Buffer.from(compiled.outputText).toString("base64");
-  return import(`data:text/javascript;base64,${encoded}`);
+  return new URL(modulePath, import.meta.url);
+}
+
+function importSpecifiers(source) {
+  return [
+    ...source.matchAll(/(?:from\s+|import\s*\()\s*["']([^"']+)["']/g),
+  ].map((match) => match[1]);
+}
+
+async function compileTypeScriptModule(modulePath, moduleCache) {
+  const moduleUrl = resolveTypeScriptModuleUrl(modulePath);
+  const cacheKey = moduleUrl.href;
+  const cached = moduleCache.get(cacheKey);
+  if (cached) return cached;
+
+  const pending = (async () => {
+    const source = await readFile(moduleUrl, "utf8");
+    const compiled = ts.transpileModule(
+      source.replace(/^import "server-only";\s*$/mu, ""),
+      {
+        compilerOptions: {
+          module: ts.ModuleKind.ESNext,
+          target: ts.ScriptTarget.ES2022,
+        },
+        fileName: modulePath,
+        reportDiagnostics: true,
+      },
+    );
+    const errors = compiled.diagnostics?.filter(
+      (diagnostic) => diagnostic.category === ts.DiagnosticCategory.Error,
+    );
+    if (errors?.length) {
+      throw new Error(
+        `无法加载 ${modulePath}: ${errors
+          .map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"))
+          .join("; ")}`,
+      );
+    }
+    let output = compiled.outputText;
+    const specifiers = [...new Set(importSpecifiers(output))];
+    for (const specifier of specifiers) {
+      let replacement = specifier;
+      if (specifier.startsWith("@/")) {
+        replacement = await compileTypeScriptModule(specifier, moduleCache);
+      } else if (!specifier.startsWith(".") && !specifier.startsWith("node:") && !specifier.includes("://")) {
+        replacement = pathToFileURL(require.resolve(specifier)).href;
+      }
+      output = output
+        .replaceAll(`"${specifier}"`, JSON.stringify(replacement))
+        .replaceAll(`'${specifier}'`, JSON.stringify(replacement));
+    }
+
+    const encoded = Buffer.from(output).toString("base64");
+    return `data:text/javascript;base64,${encoded}`;
+  })();
+  moduleCache.set(cacheKey, pending);
+  return pending;
+}
+
+async function loadTypeScriptModule(modulePath, moduleCache) {
+  return import(await compileTypeScriptModule(modulePath, moduleCache));
 }
 
 export async function loadLocalContent() {
+  const moduleCache = new Map();
   const [siteModule, postModule, validatorModule] = await Promise.all([
-    loadTypeScriptModule("../content/site.ts"),
-    loadTypeScriptModule("../content/posts.ts"),
-    loadTypeScriptModule("../lib/content/validate.ts"),
+    loadTypeScriptModule("../content/site.ts", moduleCache),
+    loadTypeScriptModule("../content/posts.ts", moduleCache),
+    loadTypeScriptModule("../lib/content/validate.ts", moduleCache),
   ]);
   const site = siteModule.siteConfig;
   const posts = postModule.posts;

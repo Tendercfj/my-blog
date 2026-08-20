@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { CalendarRange } from "lucide-react";
 
 import { ArchiveTimeline } from "@/components/blog/archive-timeline";
+import { EmptyState } from "@/components/blog/empty-state";
 import { PageIntro } from "@/components/blog/page-intro";
 import { StandardTwoColumnLayout } from "@/components/site/page-layout";
 import { BlogSidebar } from "@/components/sidebar/blog-sidebar";
@@ -41,7 +42,7 @@ export default async function ArchivesPage() {
         description="沿着时间线，回看每一篇被认真记录下来的已发布文章。"
         icon={<CalendarRange className="size-4" aria-hidden="true" />}
       />
-      <ArchiveTimeline groups={groups} />
+      {groups.length ? <ArchiveTimeline groups={groups} /> : <EmptyState message="暂无归档文章。" href={routes.account} label="进入账号工作区" />}
     </StandardTwoColumnLayout>
   );
 }
